@@ -24,7 +24,7 @@ export function LoginForm() {
     if (next.email || next.password) return;
     setPending(true);
     await fakeRequest();
-    router.push("/bots");
+    router.push("/");
   }
 
   return (
@@ -43,7 +43,7 @@ export function LoginForm() {
           </div>
         </form>
         <div className="mt-[53px]">
-          <SocialButtons onSelect={() => router.push("/bots")} />
+          <SocialButtons onSelect={() => router.push("/")} />
         </div>
       </AuthColumn>
     </>

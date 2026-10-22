@@ -1,23 +1,12 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { BotDetail } from "@/components/bots/bot-detail";
-import { bots, getBot } from "@/lib/mock-data";
+import { BotRoute } from "@/components/bots/bot-route";
 
 type Props = { params: Promise<{ id: string }> };
 
-export function generateStaticParams() {
-  return bots.map((b) => ({ id: b.id }));
-}
+export const metadata: Metadata = { title: "Bot" };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params;
-  const bot = getBot(id);
-  return { title: bot ? `${bot.pair} bot` : "Bot" };
-}
-
+// Bots live in the browser, so the page looks the id up on the client.
 export default async function BotPage({ params }: Props) {
   const { id } = await params;
-  const bot = getBot(id);
-  if (!bot) notFound();
-  return <BotDetail bot={bot} />;
+  return <BotRoute id={id} />;
 }

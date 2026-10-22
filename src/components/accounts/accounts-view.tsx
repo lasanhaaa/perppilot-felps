@@ -5,10 +5,12 @@ import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons";
 import { EXCHANGES, ExchangeGlyph } from "@/components/brand";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useDismiss } from "@/components/ui/menu";
 import { PageBody, PageHeader } from "@/components/shell/page-header";
 import { useI18n } from "@/lib/i18n";
-import { accounts as initialAccounts } from "@/lib/mock-data";
+import { exchangeOrder } from "@/lib/mock-data";
+import { usePlatformData } from "@/lib/platform-data";
 import { formatUsd } from "@/lib/format";
 import type { Account, ExchangeId } from "@/lib/types";
 import { AddExchangeModal } from "./add-exchange-modal";
@@ -73,9 +75,10 @@ function AccountRow({ account, onRemove }: { account: Account; onRemove: () => v
 
 export function AccountsView() {
   const { t } = useI18n();
-  const [list, setList] = useState(initialAccounts);
+  const { accounts: list, addAccount, removeAccount, ready } = usePlatformData();
   const [adding, setAdding] = useState(false);
 
+  const missing = exchangeOrder.filter((ex) => !list.some((a) => a.exchange === ex));
   const byExchange = list.reduce<Record<string, Account[]>>((acc, a) => {
     (acc[a.exchange] ??= []).push(a);
     return acc;
@@ -93,6 +96,19 @@ export function AccountsView() {
         }
       />
       <PageBody className="flex flex-col gap-14 pt-8">
+        {ready && list.length === 0 && (
+          <EmptyState
+            icon="accounts"
+            className="pt-4"
+            title="No exchange accounts"
+            description="Add your API keys to connect an exchange and start trading."
+            actions={
+              <Button size="sm" icon="add" onClick={() => setAdding(true)}>
+                Add account
+              </Button>
+            }
+          />
+        )}
         {(Object.keys(byExchange) as ExchangeId[]).map((ex) => (
           <section key={ex} aria-labelledby={`ex-${ex}`}>
             <h2 id={`ex-${ex}`} className="mb-4 flex items-center gap-2 font-display text-[18px]">
@@ -105,13 +121,27 @@ export function AccountsView() {
             </h2>
             <ul>
               {byExchange[ex].map((a) => (
-                <AccountRow key={a.id} account={a} onRemove={() => setList((l) => l.filter((x) => x.id !== a.id))} />
+                <AccountRow key={a.id} account={a} onRemove={() => removeAccount(a.id)} />
               ))}
             </ul>
           </section>
         ))}
+        {ready && missing.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-white/50">
+            Not connected:
+            {missing.map((ex) => (
+              <span key={ex} className="flex items-center gap-1.5 border border-line px-2 py-0.5 text-[11px] text-white/80 uppercase">
+                <span aria-hidden className="size-1 rounded-full bg-white/40" />
+                {EXCHANGES[ex].name}
+              </span>
+            ))}
+            <button type="button" onClick={() => setAdding(true)} className="ml-auto text-info hover:underline">
+              Connect →
+            </button>
+          </div>
+        )}
       </PageBody>
-      <AddExchangeModal open={adding} onClose={() => setAdding(false)} onAdded={(a) => setList((l) => [...l, a])} />
+      <AddExchangeModal open={adding} onClose={() => setAdding(false)} onAdded={addAccount} />
     </>
   );
 }

@@ -12,11 +12,13 @@ import { ProfileMenu } from "./profile-menu";
 import { SidebarPromo } from "./promos";
 import { useShell } from "./shell-context";
 
-type NavItem = { href: string; label: MessageKey; icon: IconName; soon?: boolean; external?: boolean };
+type NavItem = { href: string; label: MessageKey; icon: IconName; soon?: boolean; beta?: boolean; external?: boolean };
 
-const PLATFORM: NavItem[] = [
+export const PLATFORM: NavItem[] = [
+  { href: "/", label: "nav.portfolio", icon: "dashboard" },
   { href: "/bots/new", label: "nav.newBot", icon: "add-diamond" },
   { href: "/bots", label: "nav.bots", icon: "bot" },
+  { href: "/trade", label: "nav.trade", icon: "candles", beta: true },
   { href: "/accounts", label: "nav.accounts", icon: "accounts" },
   { href: "/course", label: "nav.course", icon: "course" },
   { href: "#", label: "nav.points", icon: "asterisk", soon: true },
@@ -24,7 +26,8 @@ const PLATFORM: NavItem[] = [
 
 const SOCIAL: NavItem[] = [{ href: "https://discord.gg/perppilot", label: "nav.discord", icon: "bot", external: true }];
 
-function isActive(pathname: string, href: string) {
+export function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
   if (href === "/bots") return pathname === "/bots" || (pathname.startsWith("/bots/") && !pathname.startsWith("/bots/new"));
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -43,6 +46,7 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
       <Icon name={item.icon} size={20} className={active ? "" : "opacity-70"} />
       <span className="flex-1">{t(item.label)}</span>
       {item.soon && <Badge>{t("nav.comingSoon")}</Badge>}
+      {item.beta && <Badge tone="grey">{t("nav.beta")}</Badge>}
     </>
   );
 
@@ -92,7 +96,7 @@ export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onN
     <div className="flex h-full flex-col justify-between pt-6 pb-8">
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between px-4">
-          <Link href="/bots" aria-label="PerpPilot home" onClick={onNavigate}>
+          <Link href="/" aria-label="PerpPilot home" onClick={onNavigate}>
             <Logo className="text-white" />
           </Link>
           {showBell && <NotificationsButton />}
@@ -119,6 +123,40 @@ export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onN
         <LanguageRow />
         <ProfileMenu />
       </div>
+    </div>
+  );
+}
+
+/** Icon-only sidebar for full-width screens like Trade. */
+export function SidebarRail() {
+  const pathname = usePathname();
+  const { t } = useI18n();
+  return (
+    <div className="flex h-full flex-col items-center justify-between py-3">
+      <div className="flex flex-col items-center gap-3">
+        <NotificationsButton />
+        <nav aria-label={t("nav.platform")} className="flex flex-col gap-1">
+          {PLATFORM.filter((i) => !i.soon).map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                title={t(item.label)}
+                aria-label={t(item.label)}
+                aria-current={active ? "page" : undefined}
+                className={cn("grid size-10 place-items-center transition-colors", active ? "bg-brand text-black" : "text-white/60 hover:bg-fill-2 hover:text-white")}
+              >
+                <Icon name={item.icon} size={20} />
+              </Link>
+            );
+          })}
+          <span title={t("nav.points")} className="grid size-10 place-items-center text-white/30">
+            <Icon name="asterisk" size={20} />
+          </span>
+        </nav>
+      </div>
+      <ProfileMenu compact />
     </div>
   );
 }

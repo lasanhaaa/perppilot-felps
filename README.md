@@ -1,6 +1,6 @@
 # PerpPilot platform preview
 
-A clickable front end of the PerpPilot platform, coded from the Figma file "Perp pilot" (page New Design). It is a live preview for testing design improvements, so all data is mocked and no request leaves the browser.
+A clickable front end of the PerpPilot platform, coded from the Figma file "Perp pilot" (page New Design) and the live hub. It exists to test the first-access flow of a new user, so it starts empty like a fresh account on hub.perppilot.app. Accounts and bots the tester adds are kept in the browser (localStorage); Settings has a button to start over. No request leaves the browser.
 
 ## Stack
 
@@ -26,9 +26,11 @@ Vercel picks the project up with the default Next.js settings; nothing needs con
 | Route | Screen |
 | --- | --- |
 | `/login`, `/signup` | Sign in and sign up |
-| `/verify-email`, `/welcome`, `/connect-exchange`, `/create-pin` | Sign up flow |
+| `/verify-email` | Sign up: e-mail check (no exchange step) |
 | `/onboarding` | Trader profile, 3 questions in German |
+| `/` | Portfolio, empty until the first bot |
 | `/bots` | Bot overview with tabs, filters and grouped cards |
+| `/trade` | Trade terminal (beta): chart, order book, order ticket |
 | `/bots/[id]` | Bot detail with levels, stats and charts |
 | `/bots/new?type=v3` / `?type=pointbot` | Create bot, ends with the PIN modal |
 | `/accounts` | Exchange accounts and the add exchange modal |
@@ -39,6 +41,7 @@ Vercel picks the project up with the default Next.js settings; nothing needs con
 
 - `src/components/ui`: buttons, tags, fields, tabs, menus, modal
 - `src/components/shell`: sidebar, mobile header, banners, changelog tray, shared modals
-- `src/components/{bots,create-bot,accounts,course,auth,settings}`: one folder per area
-- `src/lib/mock-data.ts`: accounts, bots, changelog and course modules standing in for the API
+- `src/components/{portfolio,bots,create-bot,trade,accounts,course,auth,settings}`: one folder per area
+- `src/lib/platform-data.tsx`: the user's accounts and bots, empty at first and saved in the browser
+- `src/lib/mock-data.ts`: user, changelog, course and markets standing in for the API
 - `public/images`: raster art exported from Figma

@@ -9,7 +9,9 @@ import { Modal } from "@/components/ui/modal";
 import { SegmentedTabs } from "@/components/ui/tabs";
 import { Chip, ValueBox } from "@/components/ui/tag";
 import { PageBody } from "@/components/shell/page-header";
-import { botDetailStats as s, getAccount } from "@/lib/mock-data";
+import { botDetailStats as s } from "@/lib/mock-data";
+import { usePlatformData } from "@/lib/platform-data";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatDuration, formatPct, formatUsd } from "@/lib/format";
 import { priceSeries } from "@/lib/series";
 import type { Bot } from "@/lib/types";
@@ -125,11 +127,14 @@ function KeyValueTable({ title, rows, action }: { title: string; action?: ReactN
 
 export function BotDetail({ bot }: { bot: Bot }) {
   const router = useRouter();
+  const { getAccount } = usePlatformData();
   const account = getAccount(bot.accountId);
   const [tab, setTab] = useState<ChartTab>("market");
   const [tf, setTf] = useState<Timeframe>("1M");
   const [confirmStop, setConfirmStop] = useState(false);
   const [stopped, setStopped] = useState(bot.runState === "stopped");
+  // a bot created in this browser has no fills yet
+  const fresh = bot.equity === null && bot.runningMinutes === 0;
 
   const series = useMemo(() => {
     const tfIndex = TIMEFRAMES.indexOf(tf);
@@ -178,6 +183,27 @@ export function BotDetail({ bot }: { bot: Bot }) {
         </div>
       </div>
 
+      {fresh ? (
+        <PageBody className="flex flex-col gap-2 pt-4">
+          <div className="bg-fill-2">
+            <EmptyState
+              icon="clock"
+              title="Bot is starting"
+              description="It is placing its first orders on the exchange. Fees, equity and charts show up here after the first fills."
+            />
+          </div>
+          <KeyValueTable
+            title="Range Setup"
+            action={<RangePill status={bot.rangeStatus} />}
+            rows={[
+              { k: "Min", v: formatUsd(bot.rangeLow, { decimals: 0 }) },
+              { k: "Max", v: formatUsd(bot.rangeHigh, { decimals: 0 }) },
+              { k: "Fee rate", v: formatPct(bot.feeRate) },
+              { k: "Account", v: account?.name ?? "--" },
+            ]}
+          />
+        </PageBody>
+      ) : (
       <PageBody className="flex flex-col gap-2 pt-4">
         <LevelsBar />
 
@@ -284,6 +310,7 @@ export function BotDetail({ bot }: { bot: Bot }) {
           />
         </div>
       </PageBody>
+      )}
 
       <Modal open={confirmStop} onClose={() => setConfirmStop(false)} title="Stop this bot?" description="Open orders are cancelled and the position stays on the exchange. You can restart the bot later." className="sm:w-[520px]">
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

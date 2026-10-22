@@ -4,7 +4,7 @@ import { Icon } from "@/components/icons";
 import { EXCHANGES, ExchangeGlyph } from "@/components/brand";
 import { Chip, StatusPill, ValueBox } from "@/components/ui/tag";
 import { formatDate, formatDuration, formatK, formatPct, formatUsd, toneOf } from "@/lib/format";
-import { getAccount } from "@/lib/mock-data";
+import { usePlatformData } from "@/lib/platform-data";
 import { sparkline } from "@/lib/series";
 import type { Bot } from "@/lib/types";
 import { Sparkline } from "./sparkline";
@@ -22,6 +22,7 @@ export function kindLabel(kind: Bot["kind"]) {
 }
 
 export function BotCard({ bot }: { bot: Bot }) {
+  const { getAccount } = usePlatformData();
   const account = getAccount(bot.accountId);
   const noResult = bot.rangeStatus === "no-result";
   const tone = noResult ? "neutral" : toneOf(bot.netFees);

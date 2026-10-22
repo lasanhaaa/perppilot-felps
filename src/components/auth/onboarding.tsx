@@ -141,12 +141,12 @@ export function Onboarding() {
     }
     setPending(true);
     await fakeRequest(1200);
-    router.push("/bots");
+    router.push("/");
   }
 
   return (
     <>
-      <AuthTopBar eyebrow="Trader-Profil" step="3 / 3" />
+      <AuthTopBar eyebrow="Trader-Profil" step="2 / 2" />
       <AuthColumn wide>
         <form
           onSubmit={(e) => {

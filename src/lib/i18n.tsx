@@ -8,7 +8,10 @@ const dictionary = {
   en: {
     "nav.platform": "Platform",
     "nav.social": "Social",
+    "nav.portfolio": "Portfolio",
     "nav.newBot": "New Bot",
+    "nav.trade": "Trade",
+    "nav.beta": "Beta",
     "nav.bots": "Bots",
     "nav.accounts": "Accounts",
     "nav.course": "Course",
@@ -61,7 +64,10 @@ const dictionary = {
   de: {
     "nav.platform": "Plattform",
     "nav.social": "Community",
+    "nav.portfolio": "Portfolio",
     "nav.newBot": "Neuer Bot",
+    "nav.trade": "Trade",
+    "nav.beta": "Beta",
     "nav.bots": "Bots",
     "nav.accounts": "Konten",
     "nav.course": "Kurs",
