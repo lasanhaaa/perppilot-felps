@@ -38,8 +38,10 @@ export type TopBot = {
   pair: string;
   kind: BotKind;
   exchange: ExchangeId;
-  /** Net profit of the last 30 days, in USD. */
-  profit30d: number;
+  rangeStatus: RangeStatus;
+  /** Net fees of the last 30 days, in USD, and as a share of the pool (as on the bot card). */
+  netFees30d: number;
+  netFeesPctOfPool: number;
   apr30d: number;
   runningMinutes: number;
   seed: number;
