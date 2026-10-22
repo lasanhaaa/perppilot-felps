@@ -13,6 +13,7 @@ import { PageBody } from "@/components/shell/page-header";
 import { useShell } from "@/components/shell/shell-context";
 import { useI18n } from "@/lib/i18n";
 import { courseModules } from "@/lib/mock-data";
+import { usePlatformData } from "@/lib/platform-data";
 import type { CourseModule } from "@/lib/types";
 
 type Filter = "all" | "in-progress" | "watched";
@@ -58,6 +59,7 @@ function ModuleCard({ module, onWatch }: { module: CourseModule; onWatch: () => 
 export function CourseView() {
   const { t } = useI18n();
   const { openPortfolioAnalysis } = useShell();
+  const { markCourseStarted } = usePlatformData();
   const [filter, setFilter] = useState<Filter>("all");
   const [playing, setPlaying] = useState<CourseModule | null>(null);
 
@@ -106,7 +108,10 @@ export function CourseView() {
         </header>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((m) => (
-            <ModuleCard key={m.id} module={m} onWatch={() => setPlaying(m)} />
+            <ModuleCard key={m.id} module={m} onWatch={() => {
+                setPlaying(m);
+                markCourseStarted();
+              }} />
           ))}
         </div>
 

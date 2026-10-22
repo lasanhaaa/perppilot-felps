@@ -12,7 +12,7 @@ import { usePlatformData } from "@/lib/platform-data";
 
 export function SettingsView() {
   const { t } = useI18n();
-  const { reset, accounts, bots } = usePlatformData();
+  const { reset, accounts, bots, savePin } = usePlatformData();
   const [saved, setSaved] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState("");
@@ -90,6 +90,7 @@ export function SettingsView() {
             size="lg"
             disabled={pin.length < 6}
             onClick={() => {
+              savePin();
               setPinOpen(false);
               setPin("");
             }}

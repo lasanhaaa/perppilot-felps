@@ -27,7 +27,8 @@ Vercel picks the project up with the default Next.js settings; nothing needs con
 | --- | --- |
 | `/login`, `/signup` | Sign in and sign up |
 | `/verify-email` | Sign up: e-mail check (no exchange step) |
-| `/onboarding` | Trader profile, 3 questions in German |
+| `/onboarding` | Trader profile, 3 questions in German, then Getting started |
+| `/getting-started` | First-access checklist above Portfolio, gone once the first bot exists |
 | `/` | Portfolio, empty until the first bot |
 | `/bots` | Bot overview with tabs, filters and grouped cards |
 | `/trade` | Trade terminal (beta): chart, order book, order ticket |

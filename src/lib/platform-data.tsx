@@ -8,20 +8,22 @@ import type { Account, Bot } from "./types";
  * and whatever the user adds (accounts, bots) is kept in this browser.
  */
 
-type Store = { accounts: Account[]; bots: Bot[] };
+type Store = { accounts: Account[]; bots: Bot[]; pinSet: boolean; courseStarted: boolean };
 
 type PlatformData = Store & {
   ready: boolean;
   addAccount: (a: Account) => void;
   removeAccount: (id: string) => void;
   addBot: (b: Bot) => void;
+  savePin: () => void;
+  markCourseStarted: () => void;
   reset: () => void;
   getAccount: (id: string) => Account | undefined;
   getBot: (id: string) => Bot | undefined;
 };
 
 const DATA_KEY = "perppilot.data";
-const EMPTY: Store = { accounts: [], bots: [] };
+const EMPTY: Store = { accounts: [], bots: [], pinSet: false, courseStarted: false };
 
 const Ctx = createContext<PlatformData | null>(null);
 
@@ -64,12 +66,13 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
   const value = useMemo<PlatformData>(() => {
     const { accounts, bots } = store;
     return {
-      accounts,
-      bots,
+      ...store,
       ready,
       addAccount: (a) => update((s) => ({ ...s, accounts: [...s.accounts, a] })),
-      removeAccount: (id) => update((s) => ({ accounts: s.accounts.filter((a) => a.id !== id), bots: s.bots.filter((b) => b.accountId !== id) })),
+      removeAccount: (id) => update((s) => ({ ...s, accounts: s.accounts.filter((a) => a.id !== id), bots: s.bots.filter((b) => b.accountId !== id) })),
       addBot: (b) => update((s) => ({ ...s, bots: [b, ...s.bots] })),
+      savePin: () => update((s) => ({ ...s, pinSet: true })),
+      markCourseStarted: () => update((s) => (s.courseStarted ? s : { ...s, courseStarted: true })),
       reset: () => update(() => EMPTY),
       getAccount: (id) => accounts.find((a) => a.id === id),
       getBot: (id) => bots.find((b) => b.id === id),

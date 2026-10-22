@@ -7,12 +7,22 @@ import { Icon, type IconName } from "@/components/icons";
 import { Logo } from "@/components/brand";
 import { Badge } from "@/components/ui/tag";
 import { useI18n, type MessageKey } from "@/lib/i18n";
+import { usePlatformData } from "@/lib/platform-data";
 import { LanguageRow } from "./language-switcher";
 import { ProfileMenu } from "./profile-menu";
 import { SidebarPromo } from "./promos";
 import { useShell } from "./shell-context";
 
 type NavItem = { href: string; label: MessageKey; icon: IconName; soon?: boolean; beta?: boolean; external?: boolean };
+
+/** Shown above Portfolio until the first bot exists. */
+const GETTING_STARTED: NavItem = { href: "/getting-started", label: "nav.gettingStarted", icon: "bolt" };
+
+/** The platform menu for this user: Getting started joins it while they have no bot. */
+function usePlatformNav() {
+  const { ready, bots } = usePlatformData();
+  return ready && bots.length === 0 ? [GETTING_STARTED, ...PLATFORM] : PLATFORM;
+}
 
 export const PLATFORM: NavItem[] = [
   { href: "/", label: "nav.portfolio", icon: "dashboard" },
@@ -92,6 +102,7 @@ export function NotificationsButton({ count = 2 }: { count?: number }) {
 
 export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onNavigate?: () => void; showPromo: boolean; showBell?: boolean }) {
   const { t } = useI18n();
+  const nav = usePlatformNav();
   return (
     <div className="flex h-full flex-col justify-between pt-6 pb-8">
       <div className="flex flex-col gap-6">
@@ -104,7 +115,7 @@ export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onN
         <nav aria-label={t("nav.platform")} className="flex flex-col gap-2">
           <p className="px-4 text-[12px] font-medium tracking-[-0.02em] text-white/30 uppercase">{t("nav.platform")}</p>
           <div className="flex flex-col px-2">
-            {PLATFORM.map((item) => (
+            {nav.map((item) => (
               <NavLink key={item.label} item={item} onNavigate={onNavigate} />
             ))}
           </div>
@@ -131,12 +142,13 @@ export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onN
 export function SidebarRail() {
   const pathname = usePathname();
   const { t } = useI18n();
+  const nav = usePlatformNav();
   return (
     <div className="flex h-full flex-col items-center justify-between py-3">
       <div className="flex flex-col items-center gap-3">
         <NotificationsButton />
         <nav aria-label={t("nav.platform")} className="flex flex-col gap-1">
-          {PLATFORM.filter((i) => !i.soon).map((item) => {
+          {nav.filter((i) => !i.soon).map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link

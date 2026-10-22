@@ -293,7 +293,7 @@ export function CreateBot({ initialKind = "v3" }: { initialKind?: BotKind }) {
   const router = useRouter();
   const [kind, setKind] = useState<BotKind>(initialKind);
   const [mode, setMode] = useState<"advanced" | "simple">("advanced");
-  const { accounts, addBot, ready } = usePlatformData();
+  const { accounts, addBot, savePin, ready } = usePlatformData();
   const { get } = useAccountOptions();
   const [picked, setPicked] = useState<(string | null)[] | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
@@ -411,6 +411,7 @@ export function CreateBot({ initialKind = "v3" }: { initialKind?: BotKind }) {
         accountName={firstAccount?.title ?? "your account"}
         onConfirm={() => {
           const id = `bot-${Date.now().toString(36)}`;
+          savePin(); // a PIN typed here for the first time becomes the PIN
           addBot(newBot(id, kind, accountIds[0]!));
           router.push(`/bots/${id}`);
         }}

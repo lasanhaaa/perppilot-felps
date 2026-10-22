@@ -141,7 +141,7 @@ export function Onboarding() {
     }
     setPending(true);
     await fakeRequest(1200);
-    router.push("/");
+    router.push("/getting-started");
   }
 
   return (
