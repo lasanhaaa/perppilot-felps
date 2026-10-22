@@ -10,7 +10,6 @@ import { useI18n, type MessageKey } from "@/lib/i18n";
 import { usePlatformData } from "@/lib/platform-data";
 import { LanguageRow } from "./language-switcher";
 import { ProfileMenu } from "./profile-menu";
-import { SidebarPromo } from "./promos";
 import { useShell } from "./shell-context";
 
 type NavItem = { href: string; label: MessageKey; icon: IconName; soon?: boolean; beta?: boolean; external?: boolean };
@@ -100,9 +99,10 @@ export function NotificationsButton({ count = 2 }: { count?: number }) {
   );
 }
 
-export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onNavigate?: () => void; showPromo: boolean; showBell?: boolean }) {
+export function SidebarContent({ onNavigate, showBell = true }: { onNavigate?: () => void; showBell?: boolean }) {
   const { t } = useI18n();
   const nav = usePlatformNav();
+  const { resetPreview } = usePlatformData();
   return (
     <div className="flex h-full flex-col justify-between pt-6 pb-8">
       <div className="flex flex-col gap-6">
@@ -130,9 +130,16 @@ export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onN
         </nav>
       </div>
       <div className="flex flex-col gap-4">
-        {showPromo && <SidebarPromo />}
         <LanguageRow />
         <ProfileMenu />
+        <button
+          type="button"
+          onClick={resetPreview}
+          title="Preview only: delete accounts, bots and PIN and start the first visit again"
+          className="mx-4 -mt-2 self-start font-mono text-[11px] text-white/20 uppercase transition-colors hover:text-white"
+        >
+          ↺ Reset preview
+        </button>
       </div>
     </div>
   );

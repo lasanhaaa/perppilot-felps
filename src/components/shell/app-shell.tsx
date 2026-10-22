@@ -10,26 +10,8 @@ import { ShellContext, type ShellActions } from "./shell-context";
 import { NotificationsButton, SidebarContent, SidebarRail } from "./sidebar";
 import { ChangelogTray } from "./changelog-tray";
 import { NewBotModal, PortfolioAnalysisModal, WelcomeVideoModal } from "./modals";
-import { PromoToast, TopBanner } from "./promos";
-
-const WELCOME_KEY = "perppilot.welcome-video-seen";
-const BANNER_KEY = "perppilot.top-banner-dismissed";
-
-function readFlag(key: string) {
-  try {
-    return window.localStorage.getItem(key) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeFlag(key: string) {
-  try {
-    window.localStorage.setItem(key, "1");
-  } catch {
-    // storage blocked: the flag only lives for this session
-  }
-}
+import { PromoToast } from "./promos";
+import { PROMO_KEY, readFlag, WELCOME_KEY, writeFlag } from "@/lib/preview-flags";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -40,15 +22,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [portfolio, setPortfolio] = useState(false);
   const [video, setVideo] = useState(false);
   const [changelog, setChangelog] = useState(false);
-  const [banner, setBanner] = useState(false);
   const [toast, setToast] = useState(false);
 
-  // Banners and the welcome video depend on what this browser has already seen.
+  // The welcome video and the promo card depend on what this browser has already seen.
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- reading browser-only flags after hydration */
-    setBanner(!readFlag(BANNER_KEY));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading a browser-only flag after hydration
     if (!readFlag(WELCOME_KEY)) setVideo(true);
-    /* eslint-enable react-hooks/set-state-in-effect */
+    if (readFlag(PROMO_KEY)) return;
     const t = window.setTimeout(() => setToast(true), 4000);
     return () => window.clearTimeout(t);
   }, []);
@@ -77,14 +57,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ShellContext.Provider value={actions}>
       <div className="flex min-h-dvh flex-col bg-canvas">
-        {banner && !compact && (
-          <TopBanner
-            onClose={() => {
-              setBanner(false);
-              writeFlag(BANNER_KEY);
-            }}
-          />
-        )}
         <div className="flex flex-1">
           {compact ? (
             <aside className="sticky top-0 hidden h-dvh w-14 shrink-0 bg-fill-2 lg:block">
@@ -92,7 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </aside>
           ) : (
             <aside className="sticky top-0 hidden h-dvh w-[264px] shrink-0 bg-fill-2 lg:block">
-              <SidebarContent showPromo={!banner} />
+              <SidebarContent />
             </aside>
           )}
 
@@ -123,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         >
           <IconButton icon="close" label="Close menu" className="absolute top-5 right-3 z-10" onClick={() => setMobileNav(false)} />
-          {mobileNav && <SidebarContent showPromo={false} showBell={false} onNavigate={() => setMobileNav(false)} />}
+          {mobileNav && <SidebarContent showBell={false} onNavigate={() => setMobileNav(false)} />}
         </div>
       </div>
 
@@ -138,7 +110,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           setPortfolio(true);
         }}
       />
-      {toast && !video && pathname === "/bots" && <PromoToast onClose={() => setToast(false)} />}
+      {/* not on Trade, where the corner holds the order ticket */}
+      {toast && !video && !compact && (
+        <PromoToast
+          onClose={() => {
+            setToast(false);
+            writeFlag(PROMO_KEY);
+          }}
+        />
+      )}
     </ShellContext.Provider>
   );
 }

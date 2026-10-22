@@ -1,6 +1,6 @@
 # PerpPilot platform preview
 
-A clickable front end of the PerpPilot platform, coded from the Figma file "Perp pilot" (page New Design) and the live hub. It exists to test the first-access flow of a new user, so it starts empty like a fresh account on hub.perppilot.app. Accounts and bots the tester adds are kept in the browser (localStorage); Settings has a button to start over. No request leaves the browser. A faint "Skip" in the bottom-right corner of sign-up, onboarding, setup and the PIN prompt fills test data so the flow can be walked without typing.
+A clickable front end of the PerpPilot platform, coded from the Figma file "Perp pilot" (page New Design) and the live hub. It exists to test the first-access flow of a new user, so it starts empty like a fresh account on hub.perppilot.app. Accounts and bots the tester adds are kept in the browser (localStorage); Settings has a button to start over. No request leaves the browser. A faint "Skip" in the bottom-right corner of sign-up, onboarding, setup and the PIN prompt fills test data so the flow can be walked without typing. "Reset preview" at the bottom of the sidebar (or in Settings) wipes everything and starts the first visit again.
 
 ## Stack
 

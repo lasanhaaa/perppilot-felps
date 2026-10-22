@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { clearPreviewFlags } from "./preview-flags";
 import type { Account, Bot } from "./types";
 
 /*
@@ -18,6 +19,8 @@ type PlatformData = Store & {
   savePin: () => void;
   markCourseStarted: () => void;
   reset: () => void;
+  /** Wipes everything this browser kept and reloads on Getting started, as a brand new user. */
+  resetPreview: () => void;
   getAccount: (id: string) => Account | undefined;
   getBot: (id: string) => Bot | undefined;
 };
@@ -74,6 +77,13 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
       savePin: () => update((s) => ({ ...s, pinSet: true })),
       markCourseStarted: () => update((s) => (s.courseStarted ? s : { ...s, courseStarted: true })),
       reset: () => update(() => EMPTY),
+      resetPreview: () => {
+        save(EMPTY);
+        clearPreviewFlags();
+        // a full reload, so the shell also starts over (welcome video, promo card)
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.assign("/getting-started");
+      },
       getAccount: (id) => accounts.find((a) => a.id === id),
       getBot: (id) => bots.find((b) => b.id === id),
     };
