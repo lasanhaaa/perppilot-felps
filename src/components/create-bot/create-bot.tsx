@@ -313,11 +313,11 @@ export function CreateBot({ initialKind = "v3" }: { initialKind?: BotKind }) {
           <div className="bg-fill-2">
             <EmptyState
               icon="accounts"
-              title="No exchange accounts"
-              description="You need to add an exchange account before creating a bot."
+              title="Set up your profile first"
+              description="Your bot needs an exchange account to trade on. Connect one and create your PIN, then come back here."
               actions={
-                <ButtonLink href="/accounts" size="sm">
-                  Add account
+                <ButtonLink href="/setup" size="sm" iconRight="arrow-forward">
+                  Setup your profile
                 </ButtonLink>
               }
             />

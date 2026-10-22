@@ -1,6 +1,6 @@
 # PerpPilot platform preview
 
-A clickable front end of the PerpPilot platform, coded from the Figma file "Perp pilot" (page New Design) and the live hub. It exists to test the first-access flow of a new user, so it starts empty like a fresh account on hub.perppilot.app. Accounts and bots the tester adds are kept in the browser (localStorage); Settings has a button to start over. No request leaves the browser.
+A clickable front end of the PerpPilot platform, coded from the Figma file "Perp pilot" (page New Design) and the live hub. It exists to test the first-access flow of a new user, so it starts empty like a fresh account on hub.perppilot.app. Accounts and bots the tester adds are kept in the browser (localStorage); Settings has a button to start over. No request leaves the browser. A faint "Skip" in the bottom-right corner of sign-up, onboarding, setup and the PIN prompt fills test data so the flow can be walked without typing.
 
 ## Stack
 
@@ -29,6 +29,7 @@ Vercel picks the project up with the default Next.js settings; nothing needs con
 | `/verify-email` | Sign up: e-mail check (no exchange step) |
 | `/onboarding` | Trader profile, 3 questions in German, then Getting started |
 | `/getting-started` | First-access checklist above Portfolio, gone once the first bot exists |
+| `/setup` | Setup your profile: pick an exchange (Nado recommended), connect it, create the PIN |
 | `/` | Portfolio, empty until the first bot |
 | `/bots` | Bot overview with tabs, filters and grouped cards |
 | `/trade` | Trade terminal (beta): chart, order book, order ticket |

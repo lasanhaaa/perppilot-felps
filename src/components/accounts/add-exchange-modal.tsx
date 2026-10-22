@@ -7,7 +7,7 @@ import { Icon } from "@/components/icons";
 import { EXCHANGES, ExchangeLogo } from "@/components/brand";
 import { Button, IconButton } from "@/components/ui/button";
 import { useDismiss } from "@/components/ui/menu";
-import { EXCHANGE_FIELDS, requiredFilled } from "@/lib/exchange-fields";
+import { EXCHANGE_FIELDS, makeAccount, requiredFilled } from "@/lib/exchange-fields";
 import { exchangeOrder } from "@/lib/mock-data";
 import type { Account, ExchangeId } from "@/lib/types";
 
@@ -103,7 +103,7 @@ export function AddExchangeModal({ open, onClose, onAdded }: { open: boolean; on
             e.preventDefault();
             if (step === 1) return setStep(2);
             if (!canSubmit) return;
-            onAdded({ id: `acc-${Date.now()}`, name: name.trim(), exchange, expiresAt: "2030-06-27", pnl: 0, bots: 0, live: false, feeRoutingReady: exchange === "grvt" });
+            onAdded(makeAccount(name.trim(), exchange));
             reset();
             onClose();
           }}

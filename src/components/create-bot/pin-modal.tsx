@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { PinInput } from "@/components/ui/field";
+import { TestSkip } from "@/components/ui/test-skip";
 
 /** "Enter your PIN" before a bot starts: the PIN decrypts the stored API credentials. */
 export function PinModal({
@@ -42,6 +43,7 @@ export function PinModal({
         }}
       >
         <PinInput value={pin} onChange={setPin} autoFocus />
+        {open && state === "idle" && <TestSkip label="Skip PIN" onSkip={onConfirm} />}
         <Button type="submit" iconRight="arrow-forward" disabled={pin.length < 6 || state === "starting"} className="w-full">
           {state === "starting" ? pendingLabel : confirmLabel}
         </Button>

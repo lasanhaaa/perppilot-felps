@@ -1,4 +1,4 @@
-import type { ExchangeId } from "./types";
+import type { Account, ExchangeId } from "./types";
 
 export type CredentialField = { id: string; label: string; placeholder: string; secret?: boolean; optional?: boolean };
 
@@ -35,3 +35,19 @@ export const EXCHANGE_FIELDS: Record<ExchangeId, CredentialField[]> = {
 
 export const requiredFilled = (exchange: ExchangeId, values: Record<string, string>) =>
   EXCHANGE_FIELDS[exchange].every((f) => f.optional || values[f.id]?.trim());
+
+/** The account record a successful connect creates (same shape the Add account modal saves). */
+export const makeAccount = (name: string, exchange: ExchangeId): Account => ({
+  id: `acc-${Date.now()}`,
+  name,
+  exchange,
+  expiresAt: "2030-06-27",
+  pnl: 0,
+  bots: 0,
+  live: false,
+  feeRoutingReady: exchange === "grvt",
+});
+
+/** Fake values for the preview's Skip button, so a tester can walk the flow without real keys. */
+export const testCredentials = (exchange: ExchangeId) =>
+  Object.fromEntries(EXCHANGE_FIELDS[exchange].map((f) => [f.id, f.placeholder.startsWith("0x") ? "0xTEST" : "test-value"]));

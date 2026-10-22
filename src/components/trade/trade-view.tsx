@@ -332,8 +332,8 @@ export function TradeView() {
                   Unlock account
                 </Button>
               ) : (
-                <ButtonLink href="/accounts" size="sm">
-                  Add account
+                <ButtonLink href="/setup" size="sm">
+                  Setup your profile
                 </ButtonLink>
               )}
             </div>
@@ -429,8 +429,8 @@ export function TradeView() {
                   Unlock
                 </Button>
               ) : (
-                <ButtonLink href="/accounts" size="sm" variant="secondary" className="self-start border border-line">
-                  Add account
+                <ButtonLink href="/setup" size="sm" variant="secondary" className="self-start border border-line">
+                  Setup your profile
                 </ButtonLink>
               )}
             </>

@@ -131,34 +131,45 @@ export function BotsOverview() {
   );
 }
 
-/** First visit: no bots yet (copied from the live hub). */
+/** No bots yet. Without an exchange account the one way forward is "Setup your profile". */
 export function BotsEmpty({ title = "Bots", subtitle }: { title?: string; subtitle?: string }) {
+  const { accounts } = usePlatformData();
+  const noAccount = accounts.length === 0;
   return (
     <>
       <PageHeader
         title={title}
         subtitle={subtitle}
         actions={
-          <ButtonLink href="/bots/new" icon="add">
-            Add new bot
-          </ButtonLink>
+          noAccount ? undefined : (
+            <ButtonLink href="/bots/new" icon="add">
+              Add new bot
+            </ButtonLink>
+          )
         }
       />
       <PageBody>
-        <EmptyState
-          title="No bots yet"
-          description="Create your first bot to start trading automatically across exchanges."
-          actions={
-            <>
-              <ButtonLink href="/accounts" variant="ghost" size="sm" className="border border-line">
-                Add exchange account
+        {noAccount ? (
+          <EmptyState
+            title="No bots yet"
+            description="Set up your profile first: connect an exchange and create your PIN. Then you can start your first bot."
+            actions={
+              <ButtonLink href="/setup" size="sm" iconRight="arrow-forward">
+                Setup your profile
               </ButtonLink>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="No bots yet"
+            description="Create your first bot to start trading automatically across exchanges."
+            actions={
               <ButtonLink href="/bots/new" size="sm" icon="add">
                 Create bot
               </ButtonLink>
-            </>
-          }
-        />
+            }
+          />
+        )}
       </PageBody>
     </>
   );
