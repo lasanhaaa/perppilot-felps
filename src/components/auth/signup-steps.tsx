@@ -8,6 +8,7 @@ import { Icon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { PinInput, TextField } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
+import { EXCHANGE_FIELDS } from "@/lib/exchange-fields";
 import type { ExchangeId } from "@/lib/types";
 import { AuthColumn, AuthHeading, AuthTopBar, StartButton } from "./auth-ui";
 import { fakeRequest, readSignupEmail } from "./session";
@@ -103,7 +104,8 @@ export function ConnectExchangeStep() {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
     const next: Record<string, string> = {};
-    for (const key of ["name", "apiKey", "apiSecret"]) if (!data[key]?.trim()) next[key] = "Required";
+    if (!data.name?.trim()) next.name = "Required";
+    for (const f of EXCHANGE_FIELDS[exchange]) if (!f.optional && !data[f.id]?.trim()) next[f.id] = "Required";
     setErrors(next);
     if (Object.keys(next).length) return;
     setPending(true);
@@ -126,7 +128,10 @@ export function ConnectExchangeStep() {
               type="button"
               role="radio"
               aria-checked={exchange === id}
-              onClick={() => setExchange(id)}
+              onClick={() => {
+                setExchange(id);
+                setErrors({});
+              }}
               className={cn(
                 "flex flex-col items-center justify-center gap-3 border-b py-4 transition-colors",
                 exchange === id ? "border-brand bg-fill-3" : "border-line-strong bg-fill-1 hover:bg-fill-2",
@@ -138,9 +143,18 @@ export function ConnectExchangeStep() {
           ))}
         </div>
         <form onSubmit={onSubmit} noValidate className="mt-8 flex flex-col gap-5">
-          <TextField label="Account name" name="name" placeholder="Main" error={errors.name} />
-          <TextField label={`${EXCHANGES[exchange].name} API key`} name="apiKey" autoComplete="off" placeholder="Paste your API key" error={errors.apiKey} />
-          <TextField label="API secret" name="apiSecret" type="password" autoComplete="off" placeholder="Paste your API secret" error={errors.apiSecret} />
+          <TextField label="Account name" name="name" placeholder="e.g. Main Trading Account" error={errors.name} />
+          {EXCHANGE_FIELDS[exchange].map((f) => (
+            <TextField
+              key={`${exchange}-${f.id}`}
+              label={f.optional ? `${f.label} (optional)` : f.label}
+              name={f.id}
+              type={f.secret ? "password" : "text"}
+              autoComplete="off"
+              placeholder={f.placeholder}
+              error={errors[f.id]}
+            />
+          ))}
           <Button type="submit" size="lg" disabled={pending} className="mt-3 w-full">
             {pending ? "Verifying keys…" : "Continue"}
           </Button>

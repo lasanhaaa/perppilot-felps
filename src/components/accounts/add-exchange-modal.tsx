@@ -7,6 +7,7 @@ import { Icon } from "@/components/icons";
 import { EXCHANGES, ExchangeLogo } from "@/components/brand";
 import { Button, IconButton } from "@/components/ui/button";
 import { useDismiss } from "@/components/ui/menu";
+import { EXCHANGE_FIELDS, requiredFilled } from "@/lib/exchange-fields";
 import { exchangeOrder } from "@/lib/mock-data";
 import type { Account, ExchangeId } from "@/lib/types";
 
@@ -65,11 +66,9 @@ function Input({ label, optional, ...rest }: { label: string; optional?: boolean
 /** "Add crypto exchange" two-step modal with the ASCII art panel (Figma: Add Account). */
 export function AddExchangeModal({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (account: Account) => void }) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [exchange, setExchange] = useState<ExchangeId>("grvt");
+  const [exchange, setExchange] = useState<ExchangeId>("extended");
   const [name, setName] = useState("");
-  const [key, setKey] = useState("");
-  const [address, setAddress] = useState("");
-  const [vault, setVault] = useState("");
+  const [creds, setCreds] = useState<Record<string, string>>({});
   const [authorized, setAuthorized] = useState(false);
   const ex = EXCHANGES[exchange];
 
@@ -85,13 +84,11 @@ export function AddExchangeModal({ open, onClose, onAdded }: { open: boolean; on
   const reset = () => {
     setStep(1);
     setName("");
-    setKey("");
-    setAddress("");
-    setVault("");
+    setCreds({});
     setAuthorized(false);
   };
 
-  const canSubmit = name.trim() && key.trim() && address.trim() && authorized;
+  const canSubmit = name.trim() && requiredFilled(exchange, creds) && authorized;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center sm:p-6">
@@ -125,7 +122,13 @@ export function AddExchangeModal({ open, onClose, onAdded }: { open: boolean; on
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <span className="text-[14px] text-white/60">Exchange</span>
-                <ExchangePicker value={exchange} onChange={setExchange} />
+                <ExchangePicker
+                  value={exchange}
+                  onChange={(id) => {
+                    setExchange(id);
+                    setCreds({});
+                  }}
+                />
               </div>
               <div className="flex flex-col gap-4 border border-line p-4">
                 <div>
@@ -144,12 +147,19 @@ export function AddExchangeModal({ open, onClose, onAdded }: { open: boolean; on
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input label="Account name" placeholder="e.g. Main" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-                <Input label="Agent private key" placeholder="0x…" value={key} onChange={(e) => setKey(e.target.value)} type="password" autoComplete="off" />
-              </div>
-              <Input label="Master account address" placeholder="0x…" value={address} onChange={(e) => setAddress(e.target.value)} autoComplete="off" />
-              <Input label="Vault address" optional placeholder="0x…" value={vault} onChange={(e) => setVault(e.target.value)} autoComplete="off" />
+              <Input label="Account name" placeholder="e.g. Main Trading Account" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+              {EXCHANGE_FIELDS[exchange].map((f) => (
+                <Input
+                  key={`${exchange}-${f.id}`}
+                  label={f.label}
+                  optional={f.optional}
+                  placeholder={f.placeholder}
+                  type={f.secret ? "password" : "text"}
+                  autoComplete="off"
+                  value={creds[f.id] ?? ""}
+                  onChange={(e) => setCreds((c) => ({ ...c, [f.id]: e.target.value }))}
+                />
+              ))}
               <label className={cn("flex cursor-pointer gap-3 border p-4 transition-colors", authorized ? "border-brand/50 bg-brand/5" : "border-line")}>
                 <input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} className="mt-1 size-4 accent-[#2fe8b4]" />
                 <span>
