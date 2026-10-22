@@ -20,7 +20,7 @@ export type ExchangeGuide = {
 export const SETUP_EXCHANGES: ExchangeGuide[] = [
   {
     id: "nado",
-    short: "The easiest to set up. Made for your first bot.",
+    short: "Easiest to set up, made for a first bot",
     effort: "Easy",
     recommended: true,
     steps: ["In Nado, open Settings and create a linked signer.", "Copy the signer private key and your wallet address."],

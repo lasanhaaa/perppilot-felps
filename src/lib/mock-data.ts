@@ -1,7 +1,8 @@
-import type { ChangelogEntry, CourseModule } from "./types";
+import type { ChangelogEntry, CourseModule, TopBot } from "./types";
 
 /*
- * Static content standing in for the Perpilot API: the user, changelog, course and markets.
+ * Static content standing in for the Perpilot API: the user, changelog, course, markets
+ * and the platform-wide top bots.
  * Accounts and bots start empty and live in the browser (see platform-data.tsx).
  */
 
@@ -52,6 +53,22 @@ export const botDetailStats = {
   },
   range: { min: 55673, max: 67728, feeRate: 0.15, poolStart: 711, assetStart: 62187 },
 };
+
+const DAY = 1440;
+
+/** The 10 most profitable bots on the platform over the last 30 days (Getting started). */
+export const topBots: TopBot[] = [
+  { id: "tb-1", pair: "BTC-USD", kind: "v3", exchange: "hyperliquid", profit30d: 4812.4, apr30d: 68.4, runningMinutes: 94 * DAY + 300, seed: 101 },
+  { id: "tb-2", pair: "ETH-USD", kind: "v3", exchange: "nado", profit30d: 3965.1, apr30d: 61.2, runningMinutes: 71 * DAY + 820, seed: 102 },
+  { id: "tb-3", pair: "SOL-USD", kind: "pointbot", exchange: "lighter", profit30d: 3410.75, apr30d: 57.9, runningMinutes: 48 * DAY + 130, seed: 103 },
+  { id: "tb-4", pair: "BTC-USD", kind: "pointbot", exchange: "extended", profit30d: 2987.3, apr30d: 49.6, runningMinutes: 122 * DAY + 610, seed: 104 },
+  { id: "tb-5", pair: "HYPE-USD", kind: "v3", exchange: "hyperliquid", profit30d: 2544.9, apr30d: 83.1, runningMinutes: 33 * DAY + 1020, seed: 105 },
+  { id: "tb-6", pair: "ETH-USD", kind: "pointbot", exchange: "lighter", profit30d: 2201.45, apr30d: 44.7, runningMinutes: 66 * DAY + 45, seed: 106 },
+  { id: "tb-7", pair: "BTC-USD", kind: "v3", exchange: "nado", profit30d: 1876.2, apr30d: 39.8, runningMinutes: 57 * DAY + 400, seed: 107 },
+  { id: "tb-8", pair: "SOL-USD", kind: "v3", exchange: "extended", profit30d: 1652.05, apr30d: 41.3, runningMinutes: 29 * DAY + 960, seed: 108 },
+  { id: "tb-9", pair: "XRP-USD", kind: "v3", exchange: "hyperliquid", profit30d: 1418.6, apr30d: 36.5, runningMinutes: 40 * DAY + 210, seed: 109 },
+  { id: "tb-10", pair: "ETH-USD", kind: "v3", exchange: "extended", profit30d: 1203.35, apr30d: 31.2, runningMinutes: 85 * DAY + 700, seed: 110 },
+];
 
 export const changelog: ChangelogEntry[] = [
   {

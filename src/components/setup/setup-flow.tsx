@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { EXCHANGES, ExchangeLogo, Logo } from "@/components/brand";
 import { Icon } from "@/components/icons";
 import { Button, ButtonLink } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { MonoTag } from "@/components/ui/tag";
 import { TestSkip } from "@/components/ui/test-skip";
 import { cn } from "@/lib/cn";
@@ -53,65 +55,59 @@ function Progress({ step, pinSet }: { step: StepId; pinSet: boolean }) {
   );
 }
 
+/** "Setup difficulty" with 1 to 3 bars, so the level reads on its own. */
 function Effort({ level }: { level: ExchangeGuide["effort"] }) {
   return (
-    <span className="flex items-center gap-1.5 text-[12px] text-white/50">
-      <span className="flex gap-0.5" aria-hidden>
-        {[1, 2, 3].map((n) => (
-          <span key={n} className={cn("h-2.5 w-1.5", n <= EFFORT_DOTS[level] ? "bg-white/70" : "bg-white/15")} />
-        ))}
+    <span className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-1.5">
+      <span className="text-[11px] font-medium text-white/40 uppercase">Setup difficulty</span>
+      <span className="flex items-center gap-1.5 text-[13px] text-white/70">
+        <span className="flex gap-0.5" aria-hidden>
+          {[1, 2, 3].map((n) => (
+            <span key={n} className={cn("h-2.5 w-1.5", n <= EFFORT_DOTS[level] ? "bg-white/70" : "bg-white/15")} />
+          ))}
+        </span>
+        {level}
       </span>
-      {level}
     </span>
   );
 }
 
-/** Step 1: one big recommended choice, the rest as quiet one-line rows. */
+/** Step 1: the same card for every exchange, Nado first with the Recommended tag. */
 function ChooseExchange({ onPick }: { onPick: (id: ExchangeId) => void }) {
-  const [top, ...others] = SETUP_EXCHANGES;
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-8">
+    <div className="mx-auto flex max-w-[680px] flex-col gap-8">
       <div className="flex flex-col gap-2 text-center">
         <h1 className="font-display text-[32px] leading-[1.15] sm:text-[40px]">Choose your exchange</h1>
         <p className="text-[16px] text-white/60">Your bots trade on it. You can add more later.</p>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onPick(top.id)}
-        className="group flex flex-col items-center gap-5 border border-brand bg-brand/[0.06] px-6 py-8 text-center transition-colors hover:bg-brand/10"
-      >
-        <MonoTag tone="brand">Recommended</MonoTag>
-        <ExchangeLogo id={top.id} size={64} />
-        <span className="flex flex-col gap-1">
-          <span className="font-display text-[28px] leading-[1.1]">{EXCHANGES[top.id].name}</span>
-          <span className="text-[15px] text-white/70">{top.short}</span>
-        </span>
-        <span className="inline-flex h-12 items-center gap-2 bg-brand px-6 text-[14px] font-semibold text-black uppercase group-hover:brightness-110">
-          Continue with {EXCHANGES[top.id].name} <Icon name="arrow-forward" size={20} />
-        </span>
-      </button>
-
-      <div className="flex flex-col gap-2">
-        <p className="text-center text-[12px] font-medium text-white/40 uppercase">Or pick another one</p>
-        <ul className="flex flex-col gap-1">
-          {others.map((g) => (
-            <li key={g.id}>
-              <button type="button" onClick={() => onPick(g.id)} className="flex w-full items-center gap-4 bg-fill-2 p-3 text-left transition-colors hover:bg-fill-3">
-                <ExchangeLogo id={g.id} size={36} />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-[15px]">{EXCHANGES[g.id].name}</span>
-                  <span className="truncate text-[13px] text-white/50">{g.short}</span>
+      <ul className="flex flex-col gap-2">
+        {SETUP_EXCHANGES.map((g) => (
+          <li key={g.id}>
+            <button
+              type="button"
+              onClick={() => onPick(g.id)}
+              className="group flex w-full items-center gap-4 border border-line bg-fill-2 p-4 text-left transition-colors hover:border-white/25 hover:bg-fill-3 sm:gap-5 sm:p-5"
+            >
+              <ExchangeLogo id={g.id} size={48} />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-[17px] font-medium">{EXCHANGES[g.id].name}</span>
+                  {g.recommended && <MonoTag tone="brand">Recommended</MonoTag>}
                 </span>
-                <span className="hidden sm:block">
+                <span className="text-[14px] text-white/55">{g.short}</span>
+                <span className="pt-1 sm:hidden">
                   <Effort level={g.effort} />
                 </span>
-                <Icon name="arrow-forward" size={20} className="text-white/40" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+              </span>
+              <span className="hidden sm:block">
+                <Effort level={g.effort} />
+              </span>
+              <Icon name="arrow-forward" size={20} className="shrink-0 text-white/40 transition-colors group-hover:text-white" />
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -144,6 +140,42 @@ function GuideStep({ n, title, last, children }: { n: number; title: string; las
   );
 }
 
+/** Exchange video tutorial; the poster stands in until each exchange has its own video. */
+function TutorialModal({ exchange, open, onClose }: { exchange: ExchangeId; open: boolean; onClose: () => void }) {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <Modal
+      open={open}
+      onClose={() => {
+        setPlaying(false);
+        onClose();
+      }}
+      accent
+      title={`How to connect ${EXCHANGES[exchange].name}`}
+      description="Every step on video, from creating the account to pasting the keys."
+      className="sm:w-[951px]"
+    >
+      <div className="relative aspect-[903/527] w-full overflow-hidden bg-[#2a2a2a]">
+        <Image src="/images/video-poster.png" alt="" fill sizes="(min-width: 960px) 903px, 100vw" className="object-cover" />
+        <button
+          type="button"
+          onClick={() => setPlaying((p) => !p)}
+          aria-label={playing ? "Pause video" : "Play video"}
+          className="absolute top-1/2 left-1/2 grid size-[61px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand text-black transition-transform hover:scale-105"
+        >
+          {playing ? (
+            <svg width="18" height="20" viewBox="0 0 18 20" aria-hidden="true">
+              <path d="M2 0h5v20H2zM11 0h5v20h-5z" fill="currentColor" />
+            </svg>
+          ) : (
+            <Icon name="play" size={28} className="translate-x-0.5" />
+          )}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function ConnectExchange({ exchange, onBack, onConnected }: { exchange: ExchangeId; onBack: () => void; onConnected: (account: Account) => void }) {
   const ex = EXCHANGES[exchange];
   const guide = guideFor(exchange);
@@ -151,6 +183,7 @@ function ConnectExchange({ exchange, onBack, onConnected }: { exchange: Exchange
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [authorized, setAuthorized] = useState(false);
   const [pending, setPending] = useState(false);
+  const [video, setVideo] = useState(false);
   const canSubmit = name.trim() && requiredFilled(exchange, creds) && authorized && !pending;
   const pasteStep = guide.steps.length + 2;
 
@@ -166,24 +199,29 @@ function ConnectExchange({ exchange, onBack, onConnected }: { exchange: Exchange
 
       <div className="grid items-start gap-2 lg:grid-cols-2">
         <section aria-labelledby="guide-title" className="flex flex-col gap-6 bg-fill-2 p-5 sm:p-6">
-          <h2 id="guide-title" className="text-[12px] font-medium text-white/50 uppercase">
-            How to connect, step by step
-          </h2>
+          <div className="flex flex-col gap-4 border-b border-line pb-6">
+            <h2 id="guide-title" className="text-[12px] font-medium text-white/50 uppercase">
+              How to connect, step by step
+            </h2>
+            <Button variant="secondary" icon="play" onClick={() => setVideo(true)} className="self-start border border-white/20 bg-transparent hover:border-white/40">
+              Watch the video tutorial
+            </Button>
+          </div>
           <ol className="flex flex-col">
             <GuideStep n={1} title={`Create your ${ex.name} account with our link`}>
               <p className="text-[13px] leading-[1.5] text-white/50">Accounts made through another referral cannot run bots.</p>
-              <a href="#" onClick={(e) => e.preventDefault()} className="flex h-11 items-center justify-center gap-2 self-start bg-white/10 px-5 text-[14px] text-white/90 hover:bg-white/15">
+              <a
+                href="#"
+                onClick={(e) => e.preventDefault()}
+                className="flex h-11 items-center justify-center gap-2 self-start bg-white/10 px-5 text-[14px] text-white/90 hover:bg-white/15"
+              >
                 Create {ex.name} account <Icon name="arrow-outward" size={16} />
               </a>
             </GuideStep>
             {guide.steps.map((s, i) => (
               <GuideStep key={s} n={i + 2} title={s} />
             ))}
-            <GuideStep n={pasteStep} title="Paste them in the form" last>
-              <a href="#" onClick={(e) => e.preventDefault()} className="flex items-center gap-2 self-start text-[14px] text-brand hover:underline">
-                <Icon name="play" size={16} /> Stuck? Watch the {ex.name} tutorial
-              </a>
-            </GuideStep>
+            <GuideStep n={pasteStep} title="Paste them in the form" last />
           </ol>
         </section>
 
@@ -233,6 +271,7 @@ function ConnectExchange({ exchange, onBack, onConnected }: { exchange: Exchange
         </form>
       </div>
 
+      <TutorialModal exchange={exchange} open={video} onClose={() => setVideo(false)} />
       <TestSkip
         label="Skip with test keys"
         onSkip={() => {
