@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Icon } from "@/components/icons";
+import { TestSkip } from "@/components/ui/test-skip";
 import { cn } from "@/lib/cn";
 import { AuthColumn, AuthTopBar, Spinner } from "./auth-ui";
 import { fakeRequest } from "./session";
@@ -141,12 +142,13 @@ export function Onboarding() {
     }
     setPending(true);
     await fakeRequest(1200);
-    router.push("/bots");
+    router.push("/getting-started");
   }
 
   return (
     <>
-      <AuthTopBar eyebrow="Trader-Profil" step="3 / 3" />
+      <TestSkip onSkip={() => router.push("/getting-started")} />
+      <AuthTopBar eyebrow="Trader-Profil" step="2 / 2" />
       <AuthColumn wide>
         <form
           onSubmit={(e) => {

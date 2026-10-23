@@ -1,8 +1,9 @@
-import type { Account, Bot, ChangelogEntry, CourseModule } from "./types";
+import type { ChangelogEntry, CourseModule, TopBot } from "./types";
 
 /*
- * Mock data standing in for the Perpilot API. Values follow the Figma screens
- * (BTC-USD V3 bots on Extended, GRVT accounts, etc.) so the preview reads like the real product.
+ * Static content standing in for the Perpilot API: the user, changelog, course, markets
+ * and the platform-wide top bots.
+ * Accounts and bots start empty and live in the browser (see platform-data.tsx).
  */
 
 export const currentUser = {
@@ -10,72 +11,6 @@ export const currentUser = {
   initials: "SL",
   email: "samuel@perppilot.app",
 };
-
-export const accounts: Account[] = [
-  { id: "acc-main", name: "Main", exchange: "extended", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: true },
-  { id: "acc-pointbot", name: "Pointbot", exchange: "extended", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: false },
-  { id: "acc-exv32", name: "EX v3 2", exchange: "extended", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: true },
-  { id: "acc-mrmm1", name: "MRMM1", exchange: "extended", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: false },
-  { id: "acc-v3btc", name: "V3 BTC", exchange: "extended", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: false },
-  { id: "acc-x0v3", name: "x0v3", exchange: "extended", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: true },
-  { id: "acc-grvt-bot", name: "GRVT Bot", exchange: "grvt", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: true, feeRoutingReady: true },
-  { id: "acc-grvt-pointbot", name: "Pointbot", exchange: "grvt", expiresAt: "2030-06-27", pnl: 252.72, bots: 12, live: false, feeRoutingReady: true },
-];
-
-type BotSeed = Pick<Bot, "pair" | "group" | "rangeStatus" | "runState" | "accountId"> &
-  Partial<Pick<Bot, "netFees" | "apr" | "netFeesPctOfPool">>;
-
-const seeds: BotSeed[] = [
-  { pair: "BTC-USD", group: "v3", rangeStatus: "in-range", runState: "active", accountId: "acc-main", netFees: 252.72, apr: 15.2, netFeesPctOfPool: 5.8 },
-  { pair: "BTC-USD", group: "v3", rangeStatus: "out-of-range", runState: "active", accountId: "acc-exv32", netFees: -25.72, apr: -15.2 },
-  { pair: "BTC-USD", group: "v3", rangeStatus: "in-range", runState: "active", accountId: "acc-x0v3", netFees: 25.72, apr: 15.2 },
-  { pair: "ETH-USD", group: "v3", rangeStatus: "out-of-range", runState: "active", accountId: "acc-main", netFees: -25.72, apr: -15.2 },
-  { pair: "SOL-USD", group: "v3", rangeStatus: "out-of-range", runState: "active", accountId: "acc-v3btc", netFees: -25.72, apr: -15.2 },
-  { pair: "BTC-USD", group: "v3", rangeStatus: "no-result", runState: "active", accountId: "acc-mrmm1", netFees: 0, apr: 0, netFeesPctOfPool: 0 },
-  { pair: "BTC-USD", group: "points", rangeStatus: "in-range", runState: "active", accountId: "acc-pointbot", netFees: 252.72, apr: 15.2, netFeesPctOfPool: 5.8 },
-  { pair: "ETH-USD", group: "points", rangeStatus: "out-of-range", runState: "active", accountId: "acc-grvt-bot", netFees: -25.72, apr: -15.2 },
-  { pair: "BTC-USD", group: "points", rangeStatus: "in-range", runState: "active", accountId: "acc-grvt-pointbot", netFees: 25.72, apr: 15.2 },
-  { pair: "HYPE-USD", group: "points", rangeStatus: "out-of-range", runState: "active", accountId: "acc-pointbot", netFees: -25.72, apr: -15.2 },
-  { pair: "BTC-USD", group: "points", rangeStatus: "out-of-range", runState: "active", accountId: "acc-grvt-bot", netFees: -25.72, apr: -15.2 },
-  { pair: "SOL-USD", group: "points", rangeStatus: "in-range", runState: "active", accountId: "acc-grvt-pointbot", netFees: 25.72, apr: 15.2 },
-  // errored and stopped bots for the other tabs
-  { pair: "BTC-USD", group: "v3", rangeStatus: "out-of-range", runState: "error", accountId: "acc-main", netFees: -12.4, apr: -6.1 },
-  { pair: "ETH-USD", group: "v3", rangeStatus: "no-result", runState: "error", accountId: "acc-exv32", netFees: 0, apr: 0 },
-  { pair: "BTC-USD", group: "points", rangeStatus: "out-of-range", runState: "error", accountId: "acc-grvt-bot", netFees: -4.18, apr: -2.3 },
-  { pair: "BTC-USD", group: "v3", rangeStatus: "in-range", runState: "stopped", accountId: "acc-x0v3", netFees: 88.12, apr: 9.4 },
-  { pair: "SOL-USD", group: "v3", rangeStatus: "out-of-range", runState: "stopped", accountId: "acc-v3btc", netFees: -8.9, apr: -3.2 },
-  { pair: "ETH-USD", group: "points", rangeStatus: "in-range", runState: "stopped", accountId: "acc-pointbot", netFees: 41.05, apr: 7.7 },
-];
-
-export const bots: Bot[] = seeds.map((s, i) => {
-  const noResult = s.rangeStatus === "no-result";
-  return {
-    id: `bot-${(i + 1).toString().padStart(3, "0")}`,
-    kind: s.group === "points" ? "pointbot" : "v3",
-    netFees: 0,
-    apr: 0,
-    netFeesPctOfPool: noResult ? 0 : 0.8,
-    equity: noResult ? null : 257,
-    feeRate: 0.15,
-    poolSize: 149.311,
-    rangeLow: 63000,
-    rangeHigh: 69000,
-    startedAt: "2026-06-27T14:00:00Z",
-    runningMinutes: 19 * 1440 + 6 * 60,
-    leverage: 50,
-    network: "Mainnet",
-    seed: 1000 + i * 37,
-    ...s,
-  };
-});
-
-export function getBot(id: string) {
-  return bots.find((b) => b.id === id);
-}
-
-export function getAccount(id: string) {
-  return accounts.find((a) => a.id === id);
-}
 
 /** Header numbers of the bot detail page (Figma: Bots Detail Page). */
 export const botDetailStats = {
@@ -118,6 +53,22 @@ export const botDetailStats = {
   },
   range: { min: 55673, max: 67728, feeRate: 0.15, poolStart: 711, assetStart: 62187 },
 };
+
+const DAY = 1440;
+
+/** The 10 bots with the highest net fees on the platform over the last 30 days (Getting started). */
+export const topBots: TopBot[] = [
+  { id: "tb-1", pair: "BTC-USD", kind: "v3", exchange: "hyperliquid", rangeStatus: "in-range", netFees30d: 4812.4, netFeesPctOfPool: 6.4, apr30d: 68.4, runningMinutes: 94 * DAY + 300, seed: 101 },
+  { id: "tb-2", pair: "ETH-USD", kind: "v3", exchange: "nado", rangeStatus: "in-range", netFees30d: 3965.1, netFeesPctOfPool: 5.9, apr30d: 61.2, runningMinutes: 71 * DAY + 820, seed: 102 },
+  { id: "tb-3", pair: "SOL-USD", kind: "pointbot", exchange: "lighter", rangeStatus: "in-range", netFees30d: 3410.75, netFeesPctOfPool: 5.1, apr30d: 57.9, runningMinutes: 48 * DAY + 130, seed: 103 },
+  { id: "tb-4", pair: "BTC-USD", kind: "pointbot", exchange: "extended", rangeStatus: "in-range", netFees30d: 2987.3, netFeesPctOfPool: 4.6, apr30d: 49.6, runningMinutes: 122 * DAY + 610, seed: 104 },
+  { id: "tb-5", pair: "HYPE-USD", kind: "v3", exchange: "hyperliquid", rangeStatus: "in-range", netFees30d: 2544.9, netFeesPctOfPool: 7.2, apr30d: 83.1, runningMinutes: 33 * DAY + 1020, seed: 105 },
+  { id: "tb-6", pair: "ETH-USD", kind: "pointbot", exchange: "lighter", rangeStatus: "in-range", netFees30d: 2201.45, netFeesPctOfPool: 4.1, apr30d: 44.7, runningMinutes: 66 * DAY + 45, seed: 106 },
+  { id: "tb-7", pair: "BTC-USD", kind: "v3", exchange: "nado", rangeStatus: "in-range", netFees30d: 1876.2, netFeesPctOfPool: 3.8, apr30d: 39.8, runningMinutes: 57 * DAY + 400, seed: 107 },
+  { id: "tb-8", pair: "SOL-USD", kind: "v3", exchange: "extended", rangeStatus: "out-of-range", netFees30d: 1652.05, netFeesPctOfPool: 3.5, apr30d: 41.3, runningMinutes: 29 * DAY + 960, seed: 108 },
+  { id: "tb-9", pair: "XRP-USD", kind: "v3", exchange: "hyperliquid", rangeStatus: "in-range", netFees30d: 1418.6, netFeesPctOfPool: 3.2, apr30d: 36.5, runningMinutes: 40 * DAY + 210, seed: 109 },
+  { id: "tb-10", pair: "ETH-USD", kind: "v3", exchange: "extended", rangeStatus: "in-range", netFees30d: 1203.35, netFeesPctOfPool: 2.9, apr30d: 31.2, runningMinutes: 85 * DAY + 700, seed: 110 },
+];
 
 export const changelog: ChangelogEntry[] = [
   {

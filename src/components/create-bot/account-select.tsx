@@ -1,30 +1,34 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons";
 import { EXCHANGES, ExchangeLogo } from "@/components/brand";
 import { useDismiss } from "@/components/ui/menu";
-import { accounts } from "@/lib/mock-data";
+import { exchangeOrder } from "@/lib/mock-data";
+import { usePlatformData } from "@/lib/platform-data";
 import type { ExchangeId } from "@/lib/types";
 
 type Option = { id: string; title: string; subtitle: string; exchange: ExchangeId };
 
-const options: Option[] = [
-  ...accounts.map((a) => ({ id: a.id, title: a.name, subtitle: EXCHANGES[a.exchange].name, exchange: a.exchange })),
-  // exchanges without an account yet: picking one sends the user to connect it
-  ...(["hyperliquid", "lighter", "nado"] as const).map((x) => ({ id: `new-${x}`, title: EXCHANGES[x].name, subtitle: EXCHANGES[x].tagline, exchange: x })),
-];
-
-export function getAccountOption(id: string | null) {
-  return options.find((o) => o.id === id) ?? null;
+export function useAccountOptions() {
+  const { accounts } = usePlatformData();
+  const options: Option[] = accounts.map((a) => ({ id: a.id, title: a.name, subtitle: EXCHANGES[a.exchange].name, exchange: a.exchange }));
+  return {
+    options,
+    // exchanges without an account yet: picking one sends the user to connect it
+    missing: exchangeOrder.filter((x) => !accounts.some((a) => a.exchange === x)),
+    get: (id: string | null) => options.find((o) => o.id === id) ?? null,
+  };
 }
 
 /** Account picker with exchange logos (Figma: Add Bot / V3 dropdown). */
 export function AccountSelect({ value, onChange, label, exclude = [] }: { value: string | null; onChange: (id: string) => void; label: string; exclude?: string[] }) {
   const [open, setOpen] = useState(false);
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
-  const current = getAccountOption(value);
+  const { options, missing, get } = useAccountOptions();
+  const current = get(value);
 
   return (
     <div ref={ref} className="relative">
@@ -67,6 +71,17 @@ export function AccountSelect({ value, onChange, label, exclude = [] }: { value:
                 </button>
               </li>
             ))}
+          {missing.map((x) => (
+            <li key={x}>
+              <Link href="/accounts" className="flex w-full items-center gap-3 p-2 text-left opacity-60 hover:bg-fill-3 hover:opacity-100">
+                <ExchangeLogo id={x} size={32} />
+                <span className="flex flex-col">
+                  <span className="text-[14px]">{EXCHANGES[x].name}</span>
+                  <span className="text-[12px] text-white/50">Not connected · connect an account</span>
+                </span>
+              </Link>
+            </li>
+          ))}
         </ul>
       )}
     </div>

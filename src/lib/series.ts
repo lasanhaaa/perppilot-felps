@@ -2,7 +2,7 @@
  * Deterministic mock price series, so server and client render the same chart
  * and every bot keeps the same shape between visits.
  */
-function mulberry32(seed: number) {
+export function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -53,5 +53,25 @@ export function sparkline(seed: number, trend: "up" | "down" | "flat", points = 
   }
   out[0] = trend === "up" ? 0.12 : 0.88;
   out[points - 1] = trend === "up" ? 0.9 : 0.1;
+  return out;
+}
+
+export type Candle = { o: number; h: number; l: number; c: number; v: number };
+
+/** OHLC candles with volume for the trade chart. */
+export function candleSeries(seed: number, count = 120, start = 81900, volatility = 0.006): Candle[] {
+  const rand = mulberry32(seed);
+  const out: Candle[] = [];
+  let price = start;
+  for (let i = 0; i < count; i++) {
+    const swing = Math.sin(i / 14) * 0.0012 + (rand() - 0.5) * volatility;
+    const o = price;
+    const c = o * (1 + swing);
+    const h = Math.max(o, c) * (1 + rand() * volatility * 0.45);
+    const l = Math.min(o, c) * (1 - rand() * volatility * 0.45);
+    const v = 200 + rand() ** 2 * 1400 + Math.abs(swing) * 90000;
+    out.push({ o, h, l, c, v });
+    price = c;
+  }
   return out;
 }

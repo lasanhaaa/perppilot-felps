@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { TextField } from "@/components/ui/field";
+import { TestSkip } from "@/components/ui/test-skip";
 import { useI18n } from "@/lib/i18n";
 import { AuthColumn, AuthHeading, AuthTopBar, StartButton, SwitchLine } from "./auth-ui";
 import { fakeRequest, saveSignupEmail } from "./session";
@@ -33,6 +34,12 @@ export function SignupForm() {
 
   return (
     <>
+      <TestSkip
+        onSkip={() => {
+          saveSignupEmail("tester@perppilot.app");
+          router.push("/verify-email");
+        }}
+      />
       <AuthTopBar />
       <AuthColumn>
         <AuthHeading title={t("auth.createAccount")} />

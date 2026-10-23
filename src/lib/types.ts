@@ -32,6 +32,21 @@ export type Bot = {
   seed: number;
 };
 
+/** A bot from the platform-wide leaderboard (Getting started, "Top 10 bots"). */
+export type TopBot = {
+  id: string;
+  pair: string;
+  kind: BotKind;
+  exchange: ExchangeId;
+  rangeStatus: RangeStatus;
+  /** Net fees of the last 30 days, in USD, and as a share of the pool (as on the bot card). */
+  netFees30d: number;
+  netFeesPctOfPool: number;
+  apr30d: number;
+  runningMinutes: number;
+  seed: number;
+};
+
 export type Account = {
   id: string;
   name: string;

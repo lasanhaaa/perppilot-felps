@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SelectMenu } from "@/components/ui/menu";
 import { UnderlineTabs } from "@/components/ui/tabs";
 import { PageBody, PageHeader } from "@/components/shell/page-header";
 import { useShell } from "@/components/shell/shell-context";
 import { useI18n } from "@/lib/i18n";
-import { bots } from "@/lib/mock-data";
+import { usePlatformData } from "@/lib/platform-data";
 import type { Bot, BotRunState } from "@/lib/types";
 import { BotCard } from "./bot-card";
 
@@ -17,6 +18,7 @@ type Sort = "newest" | "fees" | "apr";
 export function BotsOverview() {
   const { t } = useI18n();
   const { openNewBot } = useShell();
+  const { bots, ready } = usePlatformData();
   const [tab, setTab] = useState<BotRunState>("active");
   const [type, setType] = useState<TypeFilter>("all");
   const [sort, setSort] = useState<Sort>("newest");
@@ -25,7 +27,7 @@ export function BotsOverview() {
     const c = { active: 0, error: 0, stopped: 0 };
     for (const b of bots) c[b.runState]++;
     return c;
-  }, []);
+  }, [bots]);
 
   const visible = useMemo(() => {
     const list = bots.filter((b) => b.runState === tab && (type === "all" || b.kind === type));
@@ -33,12 +35,15 @@ export function BotsOverview() {
     if (sort === "fees") sorted.sort((a, b) => b.netFees - a.netFees);
     if (sort === "apr") sorted.sort((a, b) => b.apr - a.apr);
     return sorted;
-  }, [tab, type, sort]);
+  }, [bots, tab, type, sort]);
 
   const groups: { key: Bot["group"]; title: string }[] = [
     { key: "v3", title: t("bots.group.v3") },
     { key: "points", title: t("bots.group.points") },
   ];
+
+  if (!ready) return null;
+  if (bots.length === 0) return <BotsEmpty />;
 
   return (
     <>
@@ -121,6 +126,50 @@ export function BotsOverview() {
             </section>
           );
         })}
+      </PageBody>
+    </>
+  );
+}
+
+/** No bots yet. Without an exchange account the one way forward is "Setup your profile". */
+export function BotsEmpty({ title = "Bots", subtitle }: { title?: string; subtitle?: string }) {
+  const { accounts } = usePlatformData();
+  const noAccount = accounts.length === 0;
+  return (
+    <>
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          noAccount ? undefined : (
+            <ButtonLink href="/bots/new" icon="add">
+              Add new bot
+            </ButtonLink>
+          )
+        }
+      />
+      <PageBody>
+        {noAccount ? (
+          <EmptyState
+            title="No bots yet"
+            description="Set up your profile first: connect an exchange and create your PIN. Then you can start your first bot."
+            actions={
+              <ButtonLink href="/setup" size="sm" iconRight="arrow-forward">
+                Setup your profile
+              </ButtonLink>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="No bots yet"
+            description="Create your first bot to start trading automatically across exchanges."
+            actions={
+              <ButtonLink href="/bots/new" size="sm" icon="add">
+                Create bot
+              </ButtonLink>
+            }
+          />
+        )}
       </PageBody>
     </>
   );

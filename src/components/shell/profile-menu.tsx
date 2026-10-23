@@ -20,15 +20,15 @@ export function Avatar({ initials, size = 32 }: { initials: string; size?: numbe
 }
 
 /** User card at the bottom of the sidebar; opens Settings / Log Out above it. */
-export function ProfileMenu() {
+export function ProfileMenu({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
   const { t } = useI18n();
 
   return (
-    <div ref={ref} className="relative px-2">
+    <div ref={ref} className={cn("relative", compact ? "" : "px-2")}>
       {open && (
-        <div role="menu" className="absolute right-2 bottom-[calc(100%+8px)] left-2 animate-fade-in border border-line bg-[#1a1a1a]">
+        <div role="menu" className={cn("absolute bottom-[calc(100%+8px)] z-20 animate-fade-in border border-line bg-[#1a1a1a]", compact ? "left-0 w-[220px]" : "right-2 left-2")}>
           <Link role="menuitem" href="/settings" className="flex items-center gap-3 px-4 py-3 text-[16px] text-white/80 hover:bg-fill-2" onClick={() => setOpen(false)}>
             <Icon name="settings" size={20} />
             {t("profile.settings")}
@@ -44,11 +44,16 @@ export function ProfileMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={cn("flex w-full items-center gap-3 p-2 text-left transition-colors hover:bg-fill-2", open && "bg-fill-2")}
+        aria-label={compact ? currentUser.name : undefined}
+        className={cn("flex w-full items-center gap-3 p-2 text-left transition-colors hover:bg-fill-2", open && "bg-fill-2", compact && "p-1")}
       >
         <Avatar initials={currentUser.initials} />
-        <span className="flex-1 truncate font-display text-[16px] text-white/60">{currentUser.name}</span>
-        <Icon name="chevron-down" size={24} className={cn("text-white/60 transition-transform", open && "rotate-180")} />
+        {!compact && (
+          <>
+            <span className="flex-1 truncate font-display text-[16px] text-white/60">{currentUser.name}</span>
+            <Icon name="chevron-down" size={24} className={cn("text-white/60 transition-transform", open && "rotate-180")} />
+          </>
+        )}
       </button>
     </div>
   );

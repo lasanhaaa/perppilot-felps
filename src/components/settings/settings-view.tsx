@@ -8,9 +8,11 @@ import { Checkbox, PinInput, Section, TextField } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { currentUser } from "@/lib/mock-data";
 import { useI18n } from "@/lib/i18n";
+import { usePlatformData } from "@/lib/platform-data";
 
 export function SettingsView() {
   const { t } = useI18n();
+  const { resetPreview, accounts, bots, savePin } = usePlatformData();
   const [saved, setSaved] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState("");
@@ -60,6 +62,12 @@ export function SettingsView() {
           </div>
         </Section>
 
+        <Section title="Start over" description={`Removes the ${accounts.length} accounts and ${bots.length} bots saved in this browser, so the platform is back to a first visit.`}>
+          <Button variant="secondary" onClick={resetPreview}>
+            Reset preview
+          </Button>
+        </Section>
+
         <div>
           <ButtonLink href="/login" variant="ghost" icon="log-out">
             {t("profile.logout")}
@@ -82,6 +90,7 @@ export function SettingsView() {
             size="lg"
             disabled={pin.length < 6}
             onClick={() => {
+              savePin();
               setPinOpen(false);
               setPin("");
             }}

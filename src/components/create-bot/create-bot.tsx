@@ -12,11 +12,13 @@ import { SegmentedTabs } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/tag";
 import { PageBody, PageHeader } from "@/components/shell/page-header";
 import { PriceChart } from "@/components/bots/price-chart";
+import { EmptyState } from "@/components/ui/empty-state";
 import { markets } from "@/lib/mock-data";
 import { formatUsd } from "@/lib/format";
 import { priceSeries } from "@/lib/series";
-import type { BotKind } from "@/lib/types";
-import { AccountSelect, getAccountOption } from "./account-select";
+import { usePlatformData } from "@/lib/platform-data";
+import type { Bot, BotKind } from "@/lib/types";
+import { AccountSelect, useAccountOptions } from "./account-select";
 import { PinModal } from "./pin-modal";
 
 const BOT_TYPES: { value: BotKind; title: string; text: string }[] = [
@@ -291,11 +293,38 @@ export function CreateBot({ initialKind = "v3" }: { initialKind?: BotKind }) {
   const router = useRouter();
   const [kind, setKind] = useState<BotKind>(initialKind);
   const [mode, setMode] = useState<"advanced" | "simple">("advanced");
-  const [accountIds, setAccountIds] = useState<(string | null)[]>(["acc-main", "acc-grvt-bot"]);
+  const { accounts, addBot, savePin, ready } = usePlatformData();
+  const { get } = useAccountOptions();
+  const [picked, setPicked] = useState<(string | null)[] | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
+  // default to the first two accounts until the user picks
+  const accountIds = picked ?? [accounts[0]?.id ?? null, accounts[1]?.id ?? null];
+  const setAccountIds = (fn: (ids: (string | null)[]) => (string | null)[]) => setPicked(fn(accountIds));
 
   const needed = kind === "pointbot" ? accountIds.length : 1;
-  const firstAccount = getAccountOption(accountIds[0]);
+  const firstAccount = get(accountIds[0]);
+
+  if (!ready) return null;
+  if (accounts.length === 0)
+    return (
+      <>
+        <PageHeader backHref="/bots" title="Create New Bot" subtitle="Configure and deploy a new trading bot" />
+        <PageBody className="pt-4">
+          <div className="bg-fill-2">
+            <EmptyState
+              icon="accounts"
+              title="Set up your profile first"
+              description="Your bot needs an exchange account to trade on. Connect one and create your PIN, then come back here."
+              actions={
+                <ButtonLink href="/setup" size="sm" iconRight="arrow-forward">
+                  Setup your profile
+                </ButtonLink>
+              }
+            />
+          </div>
+        </PageBody>
+      </>
+    );
 
   return (
     <>
@@ -376,7 +405,43 @@ export function CreateBot({ initialKind = "v3" }: { initialKind?: BotKind }) {
           </div>
         </div>
       </PageBody>
-      <PinModal open={pinOpen} onClose={() => setPinOpen(false)} accountName={firstAccount?.title ?? "your account"} onConfirm={() => router.push("/bots/bot-001")} />
+      <PinModal
+        open={pinOpen}
+        onClose={() => setPinOpen(false)}
+        accountName={firstAccount?.title ?? "your account"}
+        onConfirm={() => {
+          const id = `bot-${Date.now().toString(36)}`;
+          savePin(); // a PIN typed here for the first time becomes the PIN
+          addBot(newBot(id, kind, accountIds[0]!));
+          router.push(`/bots/${id}`);
+        }}
+      />
     </>
   );
+}
+
+/** A just-started bot: no fills yet, so every result is zero. */
+function newBot(id: string, kind: BotKind, accountId: string): Bot {
+  return {
+    id,
+    pair: "BTC-USD",
+    kind,
+    group: kind === "pointbot" ? "points" : "v3",
+    accountId,
+    runState: "active",
+    rangeStatus: "no-result",
+    netFees: 0,
+    netFeesPctOfPool: 0,
+    apr: 0,
+    equity: null,
+    feeRate: 0.15,
+    poolSize: 0,
+    rangeLow: 63000,
+    rangeHigh: 69000,
+    startedAt: new Date().toISOString(),
+    runningMinutes: 0,
+    leverage: kind === "pointbot" ? 50 : 1,
+    network: "Mainnet",
+    seed: Date.now() % 100000,
+  };
 }

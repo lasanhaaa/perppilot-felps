@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { TextField } from "@/components/ui/field";
+import { TestSkip } from "@/components/ui/test-skip";
 import { useI18n } from "@/lib/i18n";
 import { AuthColumn, AuthHeading, AuthTopBar, SocialButtons, StartButton, SwitchLine } from "./auth-ui";
 import { fakeRequest } from "./session";
@@ -24,11 +25,12 @@ export function LoginForm() {
     if (next.email || next.password) return;
     setPending(true);
     await fakeRequest();
-    router.push("/bots");
+    router.push("/");
   }
 
   return (
     <>
+      <TestSkip onSkip={() => router.push("/")} />
       <AuthTopBar />
       <AuthColumn>
         <AuthHeading title={t("auth.welcome")} />
@@ -43,7 +45,7 @@ export function LoginForm() {
           </div>
         </form>
         <div className="mt-[53px]">
-          <SocialButtons onSelect={() => router.push("/bots")} />
+          <SocialButtons onSelect={() => router.push("/")} />
         </div>
       </AuthColumn>
     </>
