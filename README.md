@@ -34,11 +34,13 @@ Vercel picks the project up with the default Next.js settings; nothing needs con
 | `/accounts` | Exchange accounts and the add exchange modal |
 | `/course` | PerpPilot Fundamentals course |
 | `/settings` | Profile, language, PIN and notifications |
+| `/avatars` | Generated pixel avatars (same 96 seeds as the Figma board), see `docs/generated-avatars.md` |
 
 ## Where things live
 
 - `src/components/ui`: buttons, tags, fields, tabs, menus, modal
 - `src/components/shell`: sidebar, mobile header, banners, changelog tray, shared modals
 - `src/components/{bots,create-bot,accounts,course,auth,settings}`: one folder per area
+- `src/lib/avatar.ts`: generated pixel avatars, rules in `docs/generated-avatars.md`
 - `src/lib/mock-data.ts`: accounts, bots, changelog and course modules standing in for the API
 - `public/images`: raster art exported from Figma
