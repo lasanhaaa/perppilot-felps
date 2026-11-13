@@ -4,15 +4,17 @@ import { useEffect, useId, useMemo, useRef } from "react";
 import { variantToStyle, type BotAvatarVariant } from "@/components/ui/bot-avatar";
 import { BOT_AVATAR_DARK, botAvatarParts, type BotAvatar as BotAvatarLook } from "@/lib/bot-avatar";
 import {
+  BLINK,
+  EASE,
   MOTION_BY_ID,
   REST,
   TAU,
   blinkOpen,
   clamp,
-  ease,
   evaluate,
   frac,
   hash,
+  kf,
   wrapAngle,
   type MotionStateId,
   type Pose,
@@ -24,7 +26,45 @@ const SUCCESS = "#2ABB78";
 /** Radius of the head sphere the eyes sit on, in face units (the face is 56 wide). */
 const SPHERE = 22;
 /** Seconds to blend from the last pose into a new state. */
-const BLEND = 0.35;
+const BLEND = 0.45;
+
+/**
+ * Follow-through: every channel follows its keyed value through a damped spring (frequency in
+ * Hz, damping ratio). Under 1 the channel overshoots a touch and settles, like real mass.
+ * The eyes are fast and nearly critical (they snap); the body is slower and looser (it drags and
+ * jiggles); the height is critical so the bot never sinks into the floor.
+ */
+const SPRINGS = {
+  x: { f: 5.5, z: 0.7 },
+  y: { f: 12, z: 1 },
+  rot: { f: 4.5, z: 0.5 },
+  tilt: { f: 5, z: 0.55 },
+  sx: { f: 7.5, z: 0.38 },
+  sy: { f: 7.5, z: 0.38 },
+  yaw: { f: 6, z: 0.72 },
+  gx: { f: 16, z: 0.9 },
+  gy: { f: 16, z: 0.9 },
+  eye: { f: 10, z: 0.5 },
+} as const;
+type SpringKey = keyof typeof SPRINGS;
+const SPRING_KEYS = Object.keys(SPRINGS) as SpringKey[];
+type Springs = Record<SpringKey, { x: number; v: number }>;
+
+function stepSprings(s: Springs, target: Record<SpringKey, number>, dt: number) {
+  const steps = Math.max(1, Math.ceil(dt / (1 / 240)));
+  const h = dt / steps;
+  for (const k of SPRING_KEYS) {
+    const w = TAU * SPRINGS[k].f;
+    const stiff = w * w;
+    const damp = 2 * SPRINGS[k].z * w;
+    const st = s[k];
+    const goal = target[k];
+    for (let i = 0; i < steps; i++) {
+      st.v += (stiff * (goal - st.x) - damp * st.v) * h;
+      st.x += st.v * h;
+    }
+  }
+}
 
 // ── One shared animation clock for every avatar on the page ────────────────────
 type Tick = (dt: number) => void;
@@ -100,6 +140,9 @@ type Runtime = {
   look: { x: number; y: number };
   lookActive: boolean;
   drawn: boolean;
+  /** Continuous head yaw target (spins keep counting), and the springs that follow the targets. */
+  yawT: number;
+  springs: Springs | null;
 };
 
 type Config = {
@@ -220,7 +263,9 @@ export function MotionAvatar({
 
     const reset = (rt: Runtime, c: Config, blend: boolean) => {
       const def = MOTION_BY_ID[c.state];
-      rt.from = blend && !c.paused ? rt.last : null;
+      const cut = def.enter === "cut";
+      rt.from = blend && !c.paused && !cut ? rt.last : null;
+      if (cut) rt.springs = null;
       rt.blendT = 0;
       rt.t = c.paused ? def.still : 0;
       rt.state = c.state;
@@ -246,6 +291,8 @@ export function MotionAvatar({
         look: { x: 0, y: 0 },
         lookActive: false,
         drawn: false,
+        yawT: 0,
+        springs: null,
       };
       reset(rt, c, false);
       // Start loops at a different moment per bot so a grid never moves in sync.
@@ -317,58 +364,76 @@ export function MotionAvatar({
 
       for (const g of el.extras) g.setAttribute("transform", `translate(${n(p.x)} ${n(p.y)})`);
 
-      // Thinking dots: three squares pulsing in turn.
+      // Thinking dots: each rises quickly (ease out) and drops back slower (ease in), in a cascade.
       el.dots.forEach((d, j) => {
-        const ph = frac(t * 1.1 - j * 0.16);
-        const pulse = ph < 0.5 ? Math.sin(Math.PI * (ph / 0.5)) : 0;
+        const ph = frac(t / 1.15 - j * 0.13);
+        const rise = kf(ph, [[0, 0], [0.2, 1, EASE.out], [0.52, 0, EASE.in]]);
         d.setAttribute("x", `${n(fx - 1.8 + (j - 1) * 7)}`);
-        d.setAttribute("y", `${n(top - 9 - 2.6 * pulse)}`);
-        d.setAttribute("opacity", `${n(p.dots * (0.3 + 0.7 * pulse))}`);
+        d.setAttribute("y", `${n(top - 9 - 3 * rise)}`);
+        d.setAttribute("opacity", `${n(p.dots * (0.3 + 0.7 * rise))}`);
       });
 
-      // Sleeping z's drifting up.
+      // Sleeping z's: drift up and away decelerating, fade in fast and out slow, sway a little.
       el.zs.forEach((z, j) => {
-        const ph = frac(t / 2.6 + j / 3);
-        const s = 0.75 + ph * 0.9;
+        const ph = frac(t / 2.8 + j / 3);
+        const rise = EASE.out(ph);
+        const s = 0.7 + 0.9 * rise;
+        const fade = kf(ph, [[0, 0], [0.14, 1, EASE.out], [0.5, 1], [1, 0, EASE.in]]);
         z.setAttribute(
           "transform",
-          `translate(${n(fx + 13 + ph * 12 + Math.sin(ph * 6) * 1.5)} ${n(top + 5 - ph * 22)}) scale(${n(s)})`,
+          `translate(${n(fx + 12 + rise * 13 + Math.sin(ph * TAU) * 1.4)} ${n(top + 5 - rise * 22)}) rotate(${n(-12 + 22 * rise)}) scale(${n(s)})`,
         );
-        z.setAttribute("opacity", `${n(p.zzz * Math.sin(Math.PI * ph))}`);
+        z.setAttribute("opacity", `${n(p.zzz * fade)}`);
       });
 
-      const ab = frac(t * 1.4);
-      el.alert.setAttribute("transform", `translate(${fx} ${n(top - 5 - 1.6 * (ab < 0.3 ? Math.sin((Math.PI * ab) / 0.3) : 0))})`);
-      el.alert.setAttribute("opacity", `${n(p.alert * (ab < 0.62 ? 1 : 0.25))}`);
+      // Error mark: pops in with the state, then a heartbeat pulse (quick swell, slow release).
+      const ab = frac(t / 1.4);
+      const beat = kf(ab, [[0, 0], [0.12, 1, EASE.out], [0.55, 0, EASE.inOut]]);
+      const alertScale = (0.55 + 0.45 * EASE.out(p.alert)) * (1 + 0.16 * beat);
+      el.alert.setAttribute("transform", `translate(${fx} ${n(top - 5 - 1.2 * beat)}) scale(${n(alertScale)})`);
+      el.alert.setAttribute("opacity", `${n(p.alert * (0.72 + 0.28 * beat))}`);
 
-      const np = frac(t / 1.3);
-      el.notify.setAttribute("transform", `translate(${n(right - 3)} ${n(top + 3)})`);
+      // Notification dot: pops in, a ring ripples out (expo out) and fades (ease in).
+      const np = frac(t / 1.4);
+      el.notify.setAttribute(
+        "transform",
+        `translate(${n(right - 3)} ${n(top + 3)}) scale(${n((0.5 + 0.5 * EASE.out(p.notify)) * (1 + 0.1 * kf(np, [[0, 0], [0.1, 1, EASE.out], [0.4, 0, EASE.inOut]])))})`,
+      );
       el.notify.setAttribute("opacity", `${n(p.notify)}`);
-      el.notifyRing.setAttribute("r", `${n(4 + 7 * np)}`);
-      el.notifyRing.setAttribute("opacity", `${n(0.7 * (1 - np))}`);
+      el.notifyRing.setAttribute("r", `${n(4 + 8 * EASE.snap(np))}`);
+      el.notifyRing.setAttribute("opacity", `${n(0.7 * (1 - EASE.out(np)))}`);
 
+      // Check: draws with an ease out (from the pose), pops when complete.
       el.check.setAttribute("stroke-dashoffset", `${n(1 - clamp(p.check, 0, 1))}`);
       el.check.setAttribute("opacity", `${n(clamp(p.checkA, 0, 1))}`);
-      el.check.setAttribute("transform", `translate(${fx} ${n(top - 9)})`);
+      el.check.setAttribute("transform", `translate(${fx} ${n(top - 9)}) scale(${n(1 + 0.22 * p.checkPop)})`);
 
+      // Burst: squares fly out fast and brake (expo out), staggered, spin and shrink as they go,
+      // with a little gravity.
       const bp = p.burst;
       el.burst.forEach((b, j) => {
+        const delay = ((j * 5) % 8) / 8 * 0.14;
+        const q = clamp((bp - delay) / (1 - 0.14), 0, 1);
         const a = (j * TAU) / 8 + 0.39;
-        const r = 20 + 26 * (1 - (1 - bp) ** 3);
-        const s = 4.4 * (1 - 0.6 * bp);
-        b.setAttribute("x", `${n(fx + Math.cos(a) * r - s / 2)}`);
-        b.setAttribute("y", `${n(fy + Math.sin(a) * r * 0.9 - s / 2)}`);
-        b.setAttribute("width", `${n(s)}`);
-        b.setAttribute("height", `${n(s)}`);
-        b.setAttribute("opacity", bp > 0 && bp < 1 ? `${n(1 - bp * bp)}` : "0");
+        const r = 18 + 28 * EASE.snap(q);
+        const s = 4.6 * (1 - EASE.in(q));
+        const x = fx + Math.cos(a) * r;
+        const y = fy + Math.sin(a) * r * 0.9 + 6 * q * q;
+        b.setAttribute("x", `${n(-s / 2)}`);
+        b.setAttribute("y", `${n(-s / 2)}`);
+        b.setAttribute("width", `${n(Math.max(0, s))}`);
+        b.setAttribute("height", `${n(Math.max(0, s))}`);
+        b.setAttribute("transform", `translate(${n(x)} ${n(y)}) rotate(${n((j % 2 ? 1 : -1) * 120 * EASE.out(q))})`);
+        b.setAttribute("opacity", bp > 0 && bp < 1 && q > 0 ? `${n(1 - EASE.in(q))}` : "0");
       });
 
+      // Radar ring: expands fast and brakes, thins and fades.
       const rp = p.ring;
-      el.ring.setAttribute("r", `${n(25 + 22 * (1 - (1 - rp) ** 2))}`);
-      el.ring.setAttribute("stroke-width", `${n(0.4 + 1.4 * (1 - rp))}`);
-      el.ring.setAttribute("opacity", rp > 0 && rp < 1 ? `${n(0.55 * (1 - rp))}` : "0");
+      el.ring.setAttribute("r", `${n(25 + 22 * EASE.snap(rp))}`);
+      el.ring.setAttribute("stroke-width", `${n(0.3 + 1.5 * (1 - EASE.out(rp)))}`);
+      el.ring.setAttribute("opacity", rp > 0 && rp < 1 ? `${n(0.55 * (1 - EASE.out(rp)))}` : "0");
 
-      // Orbit: two squares on a tilted ellipse, drawn behind the head on the far half.
+      // Orbit: constant angular speed (that is how orbits move), behind the head on the far half.
       const tiltO = (-12 * Math.PI) / 180;
       for (let j = 0; j < 2; j++) {
         const a = (t * TAU) / 1.9 + j * Math.PI;
@@ -390,26 +455,31 @@ export function MotionAvatar({
         }
       }
 
-      // Orders going out: small squares leaving the side the bot is working on.
+      // Orders going out: squares shoot off the working side and brake, fade as they slow.
       const dir = p.sendDir < 0 ? -1 : 1;
       el.send.forEach((s, j) => {
-        const ph = frac(t * 1.9 + j / 3);
-        const size = 3.2 * (1 - 0.4 * ph);
-        const x = (dir > 0 ? right : left) + dir * (2 + ph * 20);
-        const y = fy + 2 + (j - 1) * 5 - ph * 2 * (j - 1);
+        const ph = frac(t * 1.7 + j / 3);
+        const go = EASE.snap(ph);
+        const size = 3.2 * (1 - 0.45 * EASE.in(ph));
+        const x = (dir > 0 ? right : left) + dir * (2 + go * 22);
+        const y = fy + 2 + (j - 1) * 5 - go * 2 * (j - 1);
         s.setAttribute("x", `${n(x - size / 2)}`);
         s.setAttribute("y", `${n(y - size / 2)}`);
         s.setAttribute("width", `${n(size)}`);
         s.setAttribute("height", `${n(size)}`);
-        s.setAttribute("opacity", `${n(p.send * (1 - ph) * clamp(ph * 6, 0, 1))}`);
+        s.setAttribute("opacity", `${n(p.send * kf(ph, [[0, 0], [0.08, 1, EASE.out], [0.35, 1], [1, 0, EASE.in]]))}`);
       });
 
-      // Range arrow: up when the price is above the range, down when below.
+      // Range arrow: two chevrons flowing toward the price, each fading in and out so the loop
+      // never jumps back.
       const ad = p.arrowDir < 0 ? -1 : 1;
-      const move = ease(frac(t * 1.1)) * 3;
-      el.arrow.setAttribute("transform", `translate(${n(right + 12)} ${n(fy + ad * move)}) scale(1 ${-ad})`);
+      el.arrow.setAttribute("transform", `translate(${n(right + 12)} ${n(fy)}) scale(1 ${-ad})`);
       el.arrow.setAttribute("opacity", `${n(p.arrow)}`);
-      el.arrowParts.forEach((a, j) => a.setAttribute("opacity", j === 0 ? "1" : "0.45"));
+      el.arrowParts.forEach((a, j) => {
+        const ph = frac(t / 1.3 + j * 0.5);
+        a.setAttribute("transform", `translate(0 ${n(6 - 12 * EASE.inOut(ph))})`);
+        a.setAttribute("opacity", `${n(kf(ph, [[0, 0], [0.3, 1, EASE.out], [0.6, 1], [1, 0, EASE.in]]))}`);
+      });
     };
 
     const tick: Tick = (dt) => {
@@ -440,10 +510,10 @@ export function MotionAvatar({
         changed = true;
       }
 
+      const step = c.paused ? 0 : dt * c.speed;
       if (c.paused) {
         if (!changed) return;
       } else {
-        const step = dt * c.speed;
         rt.t += step;
         rt.blendT += step;
         if (def.kind === "once" && c.loop) {
@@ -452,7 +522,12 @@ export function MotionAvatar({
             rt.t -= period;
             rt.blinkAt -= period;
             rt.blinkStart -= period;
-            rt.from = rt.last;
+            if (def.enter === "cut") {
+              rt.from = null;
+              rt.springs = null;
+            } else {
+              rt.from = rt.last;
+            }
             rt.blendT = 0;
           }
         }
@@ -463,22 +538,63 @@ export function MotionAvatar({
         }
       }
 
-      const ctx = { seed: c.seed, look: rt.lookActive ? rt.look : null };
+      // 1. Keyed pose for this moment, blended out of the previous state.
+      const ctx = { seed: c.seed, look: rt.lookActive ? rt.look : null, loop: c.loop };
       const out = evaluate(def, rt.t, ctx, c.intensity);
-      let pose = out.pose;
+      let target = out.pose;
       let yaw = out.yaw;
-      if (def.blink && !c.paused) {
-        const b = blinkOpen((rt.t - rt.blinkStart) / 0.32);
-        pose.openL *= b;
-        pose.openR *= b;
-      }
       if (rt.from && rt.blendT < BLEND) {
-        const k = ease(rt.blendT / BLEND);
-        pose = mix(rt.from.pose, pose, k);
+        const k = EASE.inOut(rt.blendT / BLEND);
+        target = mix(rt.from.pose, target, k);
         yaw = rt.from.yaw + wrapAngle(yaw - rt.from.yaw) * k;
       } else rt.from = null;
-      rt.last = { pose, yaw: wrapAngle(yaw) };
-      draw(pose, yaw, rt.t);
+      rt.last = { pose: target, yaw: wrapAngle(yaw) };
+
+      // Spins keep counting: follow the yaw target the short way, frame to frame.
+      const prevYawT = rt.yawT;
+      rt.yawT = rt.springs ? rt.yawT + wrapAngle(yaw - rt.yawT) : yaw;
+      const yawSpeed = step > 0 ? Math.abs(rt.yawT - prevYawT) / step : 0;
+
+      // A big, fast head turn gets a blink, the way animators hide a big eye move.
+      if (def.blink && !c.paused && yawSpeed > 3.6 && rt.t - rt.blinkStart > 1.5) {
+        rt.blinkStart = rt.t;
+        if (rt.blinkAt - rt.t < 0.8) rt.blinkAt = rt.t + def.blink[0] * 0.6;
+      }
+
+      // 2. Follow-through: springs carry every channel toward its keyed value.
+      const goal = {
+        x: target.x, y: target.y, rot: target.rot, tilt: target.tilt, sx: target.sx, sy: target.sy,
+        yaw: rt.yawT, gx: target.gx, gy: target.gy, eye: target.eye,
+      };
+      if (!rt.springs || c.paused) {
+        rt.springs = Object.fromEntries(SPRING_KEYS.map((k) => [k, { x: goal[k], v: 0 }])) as Springs;
+      } else stepSprings(rt.springs, goal, step);
+      const sp = rt.springs;
+      const pose: Pose = { ...target };
+      for (const k of SPRING_KEYS) if (k !== "yaw") pose[k] = sp[k].x;
+
+      // 3. Secondary motion from speed, so every move gets it for free.
+      const k2 = c.intensity;
+      // Drag: the body leans against its own sideways movement.
+      pose.rot += clamp(-sp.x.v * 0.2, -5, 5) * k2;
+      // Arcs: a head turn dips a little and leans into the turn.
+      pose.tilt += clamp(sp.yaw.v * 1.3, -5, 5) * k2;
+      pose.y += clamp(Math.abs(sp.yaw.v) * 0.3, 0, 1.4) * k2;
+      // Speed stretches along the movement (area kept).
+      const stretch = clamp(Math.abs(sp.y.v) * 0.0014, 0, 0.1) * k2;
+      pose.sy *= 1 + stretch;
+      pose.sx /= 1 + stretch;
+
+      // Blink: crisp lids, and the head dips a hair while the eyes are shut.
+      if (def.blink && !c.paused) {
+        const b = blinkOpen((rt.t - rt.blinkStart) / BLINK);
+        pose.openL *= b;
+        pose.openR *= b;
+        pose.y += 0.35 * (1 - b);
+        pose.sy *= 1 - 0.012 * (1 - b);
+      }
+
+      draw(pose, sp.yaw.x, rt.t);
       rt.drawn = true;
     };
 
@@ -502,6 +618,7 @@ export function MotionAvatar({
       const def = MOTION_BY_ID[rt.state];
       const still = evaluate(def, def.still, { seed: c.seed, look: null }, c.intensity);
       rt.last = { pose: still.pose, yaw: wrapAngle(still.yaw) };
+      rt.yawT = rt.last.yaw;
       draw(still.pose, still.yaw, def.still);
       rt.drawn = true;
       if (!c.paused) {
@@ -583,7 +700,7 @@ export function MotionAvatar({
         </g>
         <g data-p="notify" opacity={0}>
           <circle data-p="notify-ring" r={4} fill="none" stroke="#FFFFFF" strokeWidth={1.2} />
-          <circle r={4} fill="#FFFFFF" />
+          <circle r={4} fill="#FFFFFF" stroke={dark} strokeWidth={1.8} paintOrder="stroke" />
         </g>
         <path
           data-p="check"
@@ -604,8 +721,8 @@ export function MotionAvatar({
           <rect key={j} data-p="send" width={3.2} height={3.2} fill={parts.color} opacity={0} />
         ))}
         <g data-p="arrow" opacity={0} fill="none" stroke={RED} strokeWidth={2.2} strokeLinecap="square">
-          <path data-p="arrow-part" d="M-5 1L0 -4L5 1" />
-          <path data-p="arrow-part" d="M-5 7L0 2L5 7" />
+          <path data-p="arrow-part" d="M-5 2.5L0 -2.5L5 2.5" opacity={0} />
+          <path data-p="arrow-part" d="M-5 2.5L0 -2.5L5 2.5" opacity={0} />
         </g>
       </g>
     </svg>

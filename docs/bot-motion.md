@@ -20,6 +20,24 @@ Every state is a pure function of time, so a state looks the same everywhere. St
 for 350 ms from the current pose. Two bots in the same state never move in sync (per-bot seed).
 Intensity (Subtle 0.55, Full 1) scales the movement, not the extras.
 
+## Craft
+
+How the motion is built so it reads like an animator's work, not a formula:
+
+| Principle | How it is done here |
+| --- | --- |
+| Easing | Every keyframe segment has its own cubic-bezier curve (the same curves as After Effects and CSS): `inOut` between poses, `out` to arrive, `in` to leave or fall, `snap` (expo out) for saccades and pops, `spin` for full turns, `soft` for sways and breathing. No linear moves, no symmetric smoothstep. |
+| Anticipation | A crouch before every jump, a counter-turn before a spin, the eyes moving before the head. |
+| Overlapping action | Eyes first (snap, ~0.13 s), the head after (~0.5 s), the tilt last. The eyes run a touch past the target and settle as the head arrives. |
+| Follow-through | The renderer runs every channel through a damped spring (`SPRINGS` in motion-avatar.tsx): eyes 16 Hz near critical, head 6 Hz, lean 4.5 Hz loose, squash 7.5 Hz loose (jiggle), height critical (never sinks into the floor). Stops overshoot a touch and settle. |
+| Squash and stretch | Area is kept (sx × sy = 1). Contact squashes (harder after a higher fall), speed stretches (from the vertical velocity), never at the top of a jump. |
+| Ballistic hops | Air time is a parabola: slows to the top, hangs, speeds up on the way down. Chained hops use each landing as the next crouch. |
+| Arcs and drag | A head turn dips and leans into the turn (from the yaw velocity); the body leans against its own sideways movement. |
+| Moving holds | Breathing (inhale 40%, exhale 60%) never stops; sleeping breath has the lean follow a beat later. |
+| Blinks | 0.3 s: lids accelerate shut, hold a beat, open with a long ease out; the head dips a hair. A big fast head turn triggers a blink. |
+| Extras | Staggered and eased: dots rise fast and drop slow, z's drift up decelerating, the ! has a heartbeat, the ring and the burst brake (expo out), chevrons flow and fade so loops never jump back. |
+| Transitions | States blend for 0.45 s on an in-out curve, then the springs carry the rest. New bot cuts in from nothing and, when it replays, sinks back into the ground first. |
+
 ## States
 
 | State | Kind | When | Motion |
