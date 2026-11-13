@@ -136,3 +136,32 @@ export function BotTypeLogo({ type, size = 40 }: { type: "v3" | "pointbot"; size
     </svg>
   );
 }
+
+const COINS: Record<string, { bg: string; fg: string; mark: string }> = {
+  ETH: { bg: "#627EEA", fg: "#fff", mark: "Ξ" },
+  SOL: { bg: "#9945FF", fg: "#fff", mark: "S" },
+  HYPE: { bg: "#97FCE4", fg: "#0D1012", mark: "H" },
+};
+
+/** 20px coin mark before a pair name (Figma: "Coin / BTC"). Rounded 4px square. */
+export function CoinIcon({ pair, size = 20, className }: { pair: string; size?: number; className?: string }) {
+  const base = pair.split("-")[0].toUpperCase();
+  if (base === "BTC") {
+    return (
+      <span className={cn("inline-flex shrink-0 overflow-hidden rounded-[4px]", className)} style={{ width: size, height: size }}>
+        <BtcLogo size={size} />
+      </span>
+    );
+  }
+  const coin = COINS[base] ?? { bg: "#d6d4d6", fg: "#0D1012", mark: base.slice(0, 1) };
+  return (
+    <span
+      role="img"
+      aria-label={base}
+      className={cn("inline-flex shrink-0 items-center justify-center rounded-[4px] text-[12px] leading-none font-semibold", className)}
+      style={{ width: size, height: size, background: coin.bg, color: coin.fg }}
+    >
+      {coin.mark}
+    </span>
+  );
+}

@@ -1,161 +1,229 @@
 /**
- * Generated bot avatars (Figma: page "New design 2026", section "Bot avatars · Generative system").
+ * Bot avatars: flat faces (Figma: page "New design 2026", sections "Bot avatars v3 · Faces",
+ * "Bot avatars v3 · Tech" and "Bot avatar editor").
  *
- * Every bot gets a random 32-bit `avatarSeed` once, when it is created. The avatar is a pure
- * function of that seed: a 7×7 mirrored pixel robot built from parts (antenna, head, eyes,
- * mouth, base) in one color. Same family as the 5×5 user avatars on the leaderboard, but it
- * always reads as a face, and the background is tinted with the avatar color instead of white.
+ * A bot's look is three independent choices: body shape, eye style and color
+ * (12 × 8 × 8 = 768 per style). The body and each eye are separate paths, so one eye animation
+ * (blink, look, scan, open, close) works on every shape. Two geometries share the same choices:
+ * "soft" (round corners) and "tech" (45° chamfers, square eyes). Tech has two faces: dark
+ * cut-out eyes, or body-colored eyes on a dark visor.
  *
- * Uniqueness is per account: store `signature` and keep (user_id, signature) UNIQUE, so a user
- * never sees two bots with the same robot. See docs/bot-avatars.md.
+ * Every bot gets a random 32-bit `avatarSeed` once, when it is created; until the user edits the
+ * avatar, shape, eyes and color are a pure function of that seed. See docs/bot-avatars.md.
  */
 
-export const BOT_AVATAR_GRID = 7;
-export const BOT_AVATAR_VERSION = 1;
+export type BotAvatarStyle = "soft" | "tech";
+export type BotAvatarFace = "cutout" | "visor";
+
+/** Dark cut-out used for the eyes and the visor. */
+export const BOT_AVATAR_DARK = "#0D1012";
 
 /**
  * One color per bot. Brand mint, success green, earnings green, red and amber are left out on
- * purpose: they mean status or money, and an avatar must never look like one. Gray was dropped
- * too: a gray robot reads as a skull.
- * Order matters: it is part of the signature.
+ * purpose: they mean status or money, and an avatar must never look like one.
+ * Order matters: the index is what gets stored.
  */
-export const BOT_AVATAR_PALETTE = ["#2F9AFF", "#99FFE2", "#C8E58B", "#B79CFF"] as const;
-/** Background = the avatar color at this opacity. */
-export const BOT_AVATAR_BACKGROUND_OPACITY = 0.12;
+export const BOT_AVATAR_COLORS = [
+  { name: "Blue", hex: "#2F9AFF" },
+  { name: "Mint", hex: "#99FFE2" },
+  { name: "Lime", hex: "#C8E58B" },
+  { name: "Lilac", hex: "#B79CFF" },
+  { name: "White", hex: "#FFFFFF" },
+  { name: "Pink", hex: "#FF8FC7" },
+  { name: "Violet", hex: "#7A5CFF" },
+  { name: "Sand", hex: "#E5D0B1" },
+] as const;
 
-type Cell = [col: number, row: number];
-type Part = { name: string; cells: Cell[] };
+type Pt = [number, number];
+const f = (n: number) => +n.toFixed(2);
 
-/** Cells of the left half only (columns 0-3, column 3 is the center); the right half is mirrored. */
-const rect = (c0: number, c1: number, r0: number, r1: number): Cell[] => {
-  const out: Cell[] = [];
-  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) out.push([c, r]);
-  return out;
+/** Closed polygon with every corner rounded by `r` (quadratic corners). */
+function poly(pts: Pt[], r: number): string {
+  const n = pts.length;
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const v = pts[i];
+    const toward = (p: Pt): Pt => {
+      const dx = p[0] - v[0];
+      const dy = p[1] - v[1];
+      const l = Math.hypot(dx, dy);
+      return [v[0] + (dx / l) * r, v[1] + (dy / l) * r];
+    };
+    const a = toward(pts[(i - 1 + n) % n]);
+    const b = toward(pts[(i + 1) % n]);
+    d += `${i ? "L" : "M"}${f(a[0])} ${f(a[1])}Q${v[0]} ${v[1]} ${f(b[0])} ${f(b[1])}`;
+  }
+  return `${d}Z`;
+}
+
+/** Rectangle centered on (cx, cy), optionally with rounded corners. */
+function box(cx: number, cy: number, w: number, h: number, r = 0): string {
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  const q = f(Math.min(r, w / 2, h / 2));
+  if (q <= 0) return `M${f(x)} ${f(y)}h${f(w)}v${f(h)}h${f(-w)}Z`;
+  return (
+    `M${f(x + q)} ${f(y)}h${f(w - 2 * q)}a${q} ${q} 0 0 1 ${q} ${q}v${f(h - 2 * q)}a${q} ${q} 0 0 1 ${-q} ${q}` +
+    `h${f(-(w - 2 * q))}a${q} ${q} 0 0 1 ${-q} ${-q}v${f(-(h - 2 * q))}a${q} ${q} 0 0 1 ${q} ${-q}Z`
+  );
+}
+
+/** Body outline in a 56 × 56 box, plus the point the eyes are centered on. */
+export type BotAvatarShape = { name: string; d: string; eye: Pt };
+/** Left and right eye paths for an eye center and a scale `k`; `h` = eye height at k = 1. */
+export type BotAvatarEyes = { name: string; h: number; draw: (cx: number, cy: number, k: number) => [string, string] };
+
+const PLUS: Pt[] = [[16, 2], [40, 2], [40, 16], [54, 16], [54, 40], [40, 40], [40, 54], [16, 54], [16, 40], [2, 40], [2, 16], [16, 16]];
+const HEX: Pt[] = [[15, 4], [41, 4], [54, 28], [41, 52], [15, 52], [2, 28]];
+const DIAMOND: Pt[] = [[28, 1], [55, 28], [28, 55], [1, 28]];
+const TAB: Pt[] = [[3, 3], [37, 3], [53, 19], [53, 53], [3, 53]];
+
+const SOFT_SHAPES: BotAvatarShape[] = [
+  { name: "Circle", d: "M28 2A26 26 0 0 1 28 54A26 26 0 0 1 28 2Z", eye: [28, 28] },
+  { name: "Square", d: poly([[3, 3], [53, 3], [53, 53], [3, 53]], 11), eye: [28, 28] },
+  { name: "Hexagon", d: poly(HEX, 7), eye: [28, 28] },
+  { name: "Triangle", d: poly([[28, 3], [54, 51], [2, 51]], 9), eye: [28, 37] },
+  { name: "Diamond", d: poly(DIAMOND, 8), eye: [28, 28] },
+  { name: "Plus", d: poly(PLUS, 7), eye: [28, 28] },
+  { name: "Arch", d: "M4 46V28A24 24 0 0 1 52 28V46A6 6 0 0 1 46 52H10A6 6 0 0 1 4 46Z", eye: [28, 31] },
+  { name: "Leaf", d: "M3 29A26 26 0 0 1 29 3H47A6 6 0 0 1 53 9V27A26 26 0 0 1 27 53H9A6 6 0 0 1 3 47Z", eye: [28, 28] },
+  { name: "Pill", d: "M19 10H37A18 18 0 0 1 37 46H19A18 18 0 0 1 19 10Z", eye: [28, 28] },
+  { name: "Pentagon", d: poly([[28, 2], [54, 21], [44, 52], [12, 52], [2, 21]], 8), eye: [28, 30] },
+  { name: "Tab", d: poly(TAB, 7), eye: [27, 31] },
+  { name: "Cloud", d: "M14 50A11.5 11.5 0 0 1 8 29A12.5 12.5 0 0 1 26 13A12.5 12.5 0 0 1 47 24A13.5 13.5 0 0 1 42 50Z", eye: [28, 33] },
+];
+
+const smile = (x: number, y: number, k: number) =>
+  `M${f(x - 5.5 * k)} ${f(y + 3 * k)}a${f(5.5 * k)} ${f(5.5 * k)} 0 0 1 ${f(11 * k)} 0h${f(-4 * k)}a${f(1.5 * k)} ${f(1.5 * k)} 0 0 0 ${f(-3 * k)} 0z`;
+
+const SOFT_EYES: BotAvatarEyes[] = [
+  { name: "Bars", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 6 * k, 14 * k, 3 * k), box(x + 6.5 * k, y, 6 * k, 14 * k, 3 * k)] },
+  { name: "Dots", h: 8, draw: (x, y, k) => [box(x - 7.5 * k, y, 8 * k, 8 * k, 4 * k), box(x + 7.5 * k, y, 8 * k, 8 * k, 4 * k)] },
+  { name: "Look", h: 14, draw: (x, y, k) => [box(x - 2 * k, y - k, 6 * k, 14 * k, 3 * k), box(x + 11 * k, y - k, 6 * k, 14 * k, 3 * k)] },
+  { name: "Smile", h: 5.5, draw: (x, y, k) => [smile(x - 8 * k, y, k), smile(x + 8 * k, y, k)] },
+  { name: "Blink", h: 4, draw: (x, y, k) => [box(x - 8 * k, y + 2 * k, 10 * k, 4 * k, 2 * k), box(x + 8 * k, y + 2 * k, 10 * k, 4 * k, 2 * k)] },
+  { name: "Wink", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 6 * k, 14 * k, 3 * k), box(x + 8 * k, y + 2 * k, 10 * k, 4 * k, 2 * k)] },
+  { name: "Square", h: 7, draw: (x, y, k) => [box(x - 7 * k, y, 7 * k, 7 * k, k), box(x + 7 * k, y, 7 * k, 7 * k, k)] },
+  { name: "Tall", h: 18, draw: (x, y, k) => [box(x - 5 * k, y, 5 * k, 18 * k, 2.5 * k), box(x + 5 * k, y, 5 * k, 18 * k, 2.5 * k)] },
+];
+
+const TECH_SHAPES: BotAvatarShape[] = [
+  { name: "Octagon", d: poly([[14, 3], [42, 3], [53, 14], [53, 42], [42, 53], [14, 53], [3, 42], [3, 14]], 1.5), eye: [28, 28] },
+  { name: "Block", d: poly([[3, 3], [53, 3], [53, 53], [3, 53]], 2), eye: [28, 28] },
+  { name: "Hexagon", d: poly(HEX, 1.5), eye: [28, 28] },
+  { name: "Shield", d: poly([[4, 4], [52, 4], [52, 32], [28, 54], [4, 32]], 1.5), eye: [28, 22] },
+  { name: "Diamond", d: poly(DIAMOND, 1.5), eye: [28, 28] },
+  { name: "Cut", d: poly(TAB, 1.5), eye: [27, 31] },
+  { name: "Twin cut", d: poly([[17, 3], [53, 3], [53, 39], [39, 53], [3, 53], [3, 17]], 1.5), eye: [28, 28] },
+  { name: "Chip", d: poly([[3, 3], [53, 3], [53, 21], [48, 21], [48, 35], [53, 35], [53, 53], [3, 53], [3, 35], [8, 35], [8, 21], [3, 21]], 1), eye: [28, 28] },
+  { name: "Trapezoid", d: poly([[13, 5], [43, 5], [54, 51], [2, 51]], 1.5), eye: [28, 33] },
+  { name: "Slab", d: poly([[10, 11], [46, 11], [54, 19], [54, 37], [46, 45], [10, 45], [2, 37], [2, 19]], 1.5), eye: [28, 28] },
+  { name: "Step", d: poly([[19, 3], [53, 3], [53, 53], [3, 53], [3, 19], [19, 19]], 1.5), eye: [28, 35] },
+  { name: "Cross", d: poly(PLUS, 1.5), eye: [28, 28] },
+];
+
+const bracket = (cx: number, y: number, side: 1 | -1, k: number) => {
+  const w = 6 * k;
+  const h = 14 * k;
+  const t = 2.2 * k;
+  const x0 = cx - (side * w) / 2;
+  return `M${f(x0)} ${f(y - h / 2)}h${f(side * w)}v${f(t)}h${f(-side * (w - t))}v${f(h - 2 * t)}h${f(side * (w - t))}v${f(t)}h${f(-side * w)}z`;
+};
+const segments = (cx: number, y: number, k: number) => box(cx, y - 4 * k, 6 * k, 6 * k) + box(cx, y + 4 * k, 6 * k, 6 * k);
+
+const TECH_EYES: BotAvatarEyes[] = [
+  { name: "Bars", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 5 * k, 14 * k, 0.5), box(x + 6.5 * k, y, 5 * k, 14 * k, 0.5)] },
+  { name: "Pixels", h: 7, draw: (x, y, k) => [box(x - 7.5 * k, y, 7 * k, 7 * k), box(x + 7.5 * k, y, 7 * k, 7 * k)] },
+  { name: "Look", h: 14, draw: (x, y, k) => [box(x - 2 * k, y - k, 5 * k, 14 * k, 0.5), box(x + 11 * k, y - k, 5 * k, 14 * k, 0.5)] },
+  { name: "Slits", h: 3, draw: (x, y, k) => [box(x - 8 * k, y, 10 * k, 3 * k), box(x + 8 * k, y, 10 * k, 3 * k)] },
+  { name: "Wink", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 5 * k, 14 * k, 0.5), box(x + 8 * k, y + 5.5 * k, 10 * k, 3 * k)] },
+  { name: "Tall", h: 18, draw: (x, y, k) => [box(x - 5 * k, y, 4 * k, 18 * k, 0.5), box(x + 5 * k, y, 4 * k, 18 * k, 0.5)] },
+  { name: "Brackets", h: 14, draw: (x, y, k) => [bracket(x - 7 * k, y, 1, k), bracket(x + 7 * k, y, -1, k)] },
+  { name: "Segments", h: 14, draw: (x, y, k) => [segments(x - 6.5 * k, y, k), segments(x + 6.5 * k, y, k)] },
+];
+
+export const BOT_AVATAR_PARTS: Record<BotAvatarStyle, { shapes: BotAvatarShape[]; eyes: BotAvatarEyes[] }> = {
+  soft: { shapes: SOFT_SHAPES, eyes: SOFT_EYES },
+  tech: { shapes: TECH_SHAPES, eyes: TECH_EYES },
 };
 
-/** Row 0. */
-export const ANTENNAS: Part[] = [
-  { name: "None", cells: [] },
-  { name: "Mast", cells: [[3, 0]] },
-  { name: "Twin", cells: [[1, 0]] },
-  { name: "Crown", cells: [[2, 0], [3, 0]] },
-  { name: "Horns", cells: [[0, 0]] },
-];
-/** Rows 1-5. */
-export const HEADS: Part[] = [
-  { name: "Box", cells: rect(1, 3, 1, 5) },
-  { name: "Round", cells: rect(1, 3, 1, 5).filter(([c, r]) => !(c === 1 && (r === 1 || r === 5))) },
-  { name: "Wide", cells: [...rect(0, 3, 2, 4), ...rect(1, 3, 1, 1), ...rect(1, 3, 5, 5)] },
-  { name: "Ears", cells: [...rect(1, 3, 1, 5), [0, 3]] },
-  { name: "Helmet", cells: [...rect(1, 3, 1, 5), [0, 1]] },
-  { name: "Jaw", cells: [...rect(1, 3, 1, 4), ...rect(2, 3, 5, 5)] },
-];
-/** Cut out of the head. */
-export const EYES: Part[] = [
-  { name: "Dots", cells: [[2, 2]] },
-  { name: "Tall", cells: [[2, 2], [2, 3]] },
-  { name: "Cyclops", cells: [[3, 2]] },
-  { name: "Visor", cells: [[2, 2], [3, 2]] },
-  { name: "Sleepy", cells: [[2, 3]] },
-];
-/** Cut out of the head, row 4. (A "grill" mouth was dropped: it read as teeth, a skull.) */
-export const MOUTHS: Part[] = [
-  { name: "None", cells: [] },
-  { name: "Dot", cells: [[3, 4]] },
-  { name: "Line", cells: [[2, 4], [3, 4]] },
-];
-/** Row 6. */
-export const BASES: Part[] = [
-  { name: "None", cells: [] },
-  { name: "Neck", cells: [[3, 6]] },
-  { name: "Shoulders", cells: [[1, 6], [2, 6], [3, 6]] },
-  { name: "Legs", cells: [[2, 6]] },
-];
+/** Looks per style: shapes × eyes × colors. */
+export const BOT_AVATAR_CAPACITY = SOFT_SHAPES.length * SOFT_EYES.length * BOT_AVATAR_COLORS.length;
 
-export type BotAvatar = {
-  antenna: number;
-  head: number;
-  eyes: number;
-  mouth: number;
-  base: number;
-  /** Index into BOT_AVATAR_PALETTE. */
-  color: number;
-  /** Unique id of the picture inside BOT_AVATAR_CAPACITY. Store it; (user_id, signature) is UNIQUE. */
-  signature: number;
-};
+/** What is stored for a bot: three indices. The same indices work in both styles. */
+export type BotAvatar = { shape: number; eyes: number; color: number };
 
-/** 5 × 6 × 5 × 3 × 4 × 4 = 7,200 different robots. */
-export const BOT_AVATAR_CAPACITY =
-  ANTENNAS.length * HEADS.length * EYES.length * MOUTHS.length * BASES.length * BOT_AVATAR_PALETTE.length;
+/** One number per look, for the per-account uniqueness check: shape × 64 + eyes × 8 + color. */
+export function botAvatarSignature(a: BotAvatar): number {
+  return a.shape * 64 + a.eyes * 8 + a.color;
+}
 
-/** mulberry32: tiny deterministic 32-bit PRNG, same output in every JS engine. */
-function mulberry32(seed: number): () => number {
-  let a = seed | 0;
+/** Deterministic PRNG (mulberry32). Same seed, same avatar, on any platform. */
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
   return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-/** Pure: the robot drawn by a seed. Picks antenna, head, eyes, mouth, base, color, in that order. */
+/** The avatar a new bot starts with. Order of the picks is part of the contract: shape, eyes, color. */
 export function botAvatarFromSeed(seed: number): BotAvatar {
-  const random = mulberry32(seed >>> 0);
-  const pick = (n: number) => Math.floor(random() * n);
-  const antenna = pick(ANTENNAS.length);
-  const head = pick(HEADS.length);
-  const eyes = pick(EYES.length);
-  const mouth = pick(MOUTHS.length);
-  const base = pick(BASES.length);
-  const color = pick(BOT_AVATAR_PALETTE.length);
-  let signature = antenna;
-  signature = signature * HEADS.length + head;
-  signature = signature * EYES.length + eyes;
-  signature = signature * MOUTHS.length + mouth;
-  signature = signature * BASES.length + base;
-  signature = signature * BOT_AVATAR_PALETTE.length + color;
-  return { antenna, head, eyes, mouth, base, color, signature };
+  const rnd = mulberry32(seed);
+  const pick = (n: number) => Math.floor(rnd() * n);
+  return { shape: pick(SOFT_SHAPES.length), eyes: pick(SOFT_EYES.length), color: pick(BOT_AVATAR_COLORS.length) };
 }
 
-/** Filled cells of the full 7×7 grid as [column, row] pairs, mirror included, eyes and mouth cut out. */
-export function botAvatarCells(avatar: BotAvatar): Cell[] {
-  const filled = new Set<number>();
-  const key = (c: number, r: number) => r * BOT_AVATAR_GRID + c;
-  const both = (fn: (k: number) => void) => ([c, r]: Cell) => {
-    fn(key(c, r));
-    fn(key(BOT_AVATAR_GRID - 1 - c, r));
+/** Eye scale per style and face: tech cut-outs are 15% larger, visor eyes sit smaller inside the visor. */
+const EYE_SCALE = { soft: 1, tech: 1.15, visor: 0.78 } as const;
+
+/** Paths ready to draw in a `0 0 56 56` viewBox. */
+export function botAvatarParts(avatar: BotAvatar, style: BotAvatarStyle = "tech", face: BotAvatarFace = "cutout") {
+  const { shapes, eyes } = BOT_AVATAR_PARTS[style];
+  const shape = shapes[avatar.shape % shapes.length];
+  const eyeDef = eyes[avatar.eyes % eyes.length];
+  const color = BOT_AVATAR_COLORS[avatar.color % BOT_AVATAR_COLORS.length];
+  const visor = style === "tech" && face === "visor";
+  const k = visor ? EYE_SCALE.visor : EYE_SCALE[style];
+  const [cx, cy] = shape.eye;
+  const [left, right] = eyeDef.draw(cx, cy, k);
+  return {
+    body: shape.d,
+    color: color.hex,
+    visor: visor ? box(cx, cy, 32, 18, 1) : null,
+    eyeColor: visor ? color.hex : BOT_AVATAR_DARK,
+    eyes: [left, right] as const,
+    /** Vertical scale that turns these eyes into a thin closed line (≈2.6 units tall). */
+    closedScale: f(Math.min(1, Math.max(0.15, 2.6 / (eyeDef.h * k)))),
+    label: `${shape.name}, ${eyeDef.name}, ${color.name}`,
   };
-  const add = both((k) => filled.add(k));
-  const cut = both((k) => filled.delete(k));
-  [ANTENNAS[avatar.antenna], HEADS[avatar.head], BASES[avatar.base]].forEach((p) => p.cells.forEach(add));
-  [EYES[avatar.eyes], MOUTHS[avatar.mouth]].forEach((p) => p.cells.forEach(cut));
-  return [...filled].sort((a, b) => a - b).map((k) => [k % BOT_AVATAR_GRID, Math.floor(k / BOT_AVATAR_GRID)]);
 }
 
-/** Standalone SVG string (emails, OG images, server rendering). */
-export function botAvatarSvg(seed: number, size = 56): string {
-  const avatar = botAvatarFromSeed(seed);
-  const fill = BOT_AVATAR_PALETTE[avatar.color];
-  const g = BOT_AVATAR_GRID;
-  const rects = botAvatarCells(avatar)
-    .map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1"/>`)
-    .join("");
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${g} ${g}" shape-rendering="crispEdges">` +
-    `<rect width="${g}" height="${g}" fill="${fill}" fill-opacity="${BOT_AVATAR_BACKGROUND_OPACITY}"/><g fill="${fill}">${rects}</g></svg>`
-  );
-}
-
-/** Deterministic list of demo seeds (the Figma board uses botSeedSequence(20261113, 48)). */
+/** Deterministic list of demo seeds. */
 export function botSeedSequence(start: number, count: number): number[] {
   const random = mulberry32(start);
   return Array.from({ length: count }, () => Math.floor(random() * 4294967296) >>> 0);
 }
 
-/** Seed as the 8-digit hex shown under each avatar in Figma, e.g. "2B7D9FE6". */
-export function botSeedHex(seed: number): string {
-  return (seed >>> 0).toString(16).toUpperCase().padStart(8, "0");
+/**
+ * Demo seeds whose looks never repeat, so the preview shows what the backend guarantees:
+ * no two bots of one account share a face.
+ */
+export function uniqueBotSeeds(start: number, count: number): number[] {
+  const random = mulberry32(start);
+  const seen = new Set<number>();
+  const out: number[] = [];
+  while (out.length < count) {
+    const seed = Math.floor(random() * 4294967296) >>> 0;
+    const sig = botAvatarSignature(botAvatarFromSeed(seed));
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push(seed);
+  }
+  return out;
 }
 
 /** A fresh random seed (crypto-grade; browser, Node 19+ and edge runtimes). */
@@ -164,9 +232,9 @@ export function newBotAvatarSeed(): number {
 }
 
 /**
- * Server side, when a bot is created (or in the backfill): draw seeds until the robot is free
- * inside this user's bots. `isTakenForUser(signature)` checks the (user_id, signature) UNIQUE
- * index; the insert must still rely on the constraint and retry on a conflict.
+ * Server side, when a bot is created (or in the backfill): draw seeds until the look is free
+ * inside this user's bots. `isTakenForUser(signature)` checks the (user_id, avatar_signature)
+ * UNIQUE index; the insert must still rely on the constraint and retry on a conflict.
  */
 export async function assignBotAvatar(
   isTakenForUser: (signature: number) => Promise<boolean>,
@@ -174,7 +242,7 @@ export async function assignBotAvatar(
 ): Promise<{ seed: number; signature: number }> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const seed = newBotAvatarSeed();
-    const { signature } = botAvatarFromSeed(seed);
+    const signature = botAvatarSignature(botAvatarFromSeed(seed));
     if (!(await isTakenForUser(signature))) return { seed, signature };
   }
   throw new Error(`No free bot avatar after ${maxAttempts} attempts.`);

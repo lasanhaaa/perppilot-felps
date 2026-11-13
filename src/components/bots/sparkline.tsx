@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-const COLORS = { positive: "#2fe8b4", negative: "#ff3737", neutral: "rgba(255,255,255,0.4)" };
+const COLORS = { positive: "#4ADE80", negative: "#ff3737", neutral: "rgba(255,255,255,0.4)" };
 
 /** Bot card performance line (Figma: Bot Card / Performance Chart). Values are 0..1, top is 1. */
 export function Sparkline({ values, tone, height = 56 }: { values: number[]; tone: keyof typeof COLORS; height?: number }) {

@@ -1,5 +1,5 @@
 import type { Account, Bot, ChangelogEntry, CourseModule } from "./types";
-import { botSeedSequence } from "./bot-avatar";
+import { uniqueBotSeeds } from "./bot-avatar";
 
 /*
  * Mock data standing in for the Perpilot API. Values follow the Figma screens
@@ -48,7 +48,8 @@ const seeds: BotSeed[] = [
   { pair: "ETH-USD", group: "points", rangeStatus: "in-range", runState: "stopped", accountId: "acc-pointbot", netFees: 41.05, apr: 7.7 },
 ];
 
-const avatarSeeds = botSeedSequence(20261113, seeds.length);
+// Looks never repeat inside the account (the backend keeps (user_id, avatar_signature) unique).
+const avatarSeeds = uniqueBotSeeds(20261113, seeds.length);
 
 export const bots: Bot[] = seeds.map((s, i) => {
   const noResult = s.rangeStatus === "no-result";

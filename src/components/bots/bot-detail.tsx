@@ -14,7 +14,7 @@ import { botDetailStats as s, getAccount } from "@/lib/mock-data";
 import { formatDuration, formatPct, formatUsd } from "@/lib/format";
 import { priceSeries } from "@/lib/series";
 import type { Bot } from "@/lib/types";
-import { RangePill, kindLabel } from "./bot-card";
+import { RangePill, kindLabel } from "./bot-labels";
 import { PriceChart } from "./price-chart";
 
 const TIMEFRAMES = ["1M", "5M", "15M", "1H", "4H", "1D"] as const;

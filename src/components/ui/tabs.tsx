@@ -93,3 +93,45 @@ export function SegmentedTabs<V extends string>({
     </div>
   );
 }
+
+/** Boxed page tabs from the new Bots style ("⚡ Active [2]"): active tab on a 5% box, the rest at 50%. */
+export function BoxTabs<V extends string>({
+  items,
+  value,
+  onChange,
+  className,
+}: {
+  items: TabItem<V>[];
+  value: V;
+  onChange: (value: V) => void;
+  className?: string;
+}) {
+  return (
+    <div role="tablist" className={cn("flex items-center gap-1.5 overflow-x-auto scrollbar-thin", className)}>
+      {items.map((item) => {
+        const active = item.value === value;
+        return (
+          <button
+            key={item.value}
+            role="tab"
+            type="button"
+            aria-selected={active}
+            onClick={() => onChange(item.value)}
+            className={cn(
+              "flex h-12 shrink-0 items-center gap-2 rounded-[4px] p-3 text-[16px] font-medium transition-[background-color,opacity]",
+              active ? "bg-fill-2" : "opacity-50 hover:opacity-80",
+            )}
+          >
+            <span className="flex items-center gap-1 text-white/80">
+              {item.icon && <Icon name={item.icon} size={24} />}
+              {item.label}
+            </span>
+            {item.count !== undefined && (
+              <span className="rounded-[4px] bg-white/15 px-2 text-[16px] leading-6 font-normal text-white tabular">{item.count}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
