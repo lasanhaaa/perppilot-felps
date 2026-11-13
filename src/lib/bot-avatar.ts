@@ -192,6 +192,8 @@ export function botAvatarParts(avatar: BotAvatar, style: BotAvatarStyle = "tech"
   const [left, right] = eyeDef.draw(cx, cy, k);
   return {
     body: shape.d,
+    /** Point the eyes are centered on: the face center, used for head turns. */
+    center: shape.eye,
     color: color.hex,
     visor: visor ? box(cx, cy, 32, 18, 1) : null,
     eyeColor: visor ? color.hex : BOT_AVATAR_DARK,
