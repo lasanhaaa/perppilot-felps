@@ -58,12 +58,32 @@ How the motion is built so it reads like an animator's work, not a formula:
 | Out of range | Loop | Status Out of range | Double take, then turns and leans toward the price (up/down), red arrow |
 | Needs help | Loop | Status Error | Head shake, droops and looks down, looks up at you, red ! |
 
+Two quiet states exist only for the Bots grid and do not appear on `/bot-motion`:
+
+| State | When | Motion |
+| --- | --- | --- |
+| Still | Every running bot card | Holds its pose and blinks; the render loop sleeps between blinks |
+| Dozing | Stopped bot card | Eyes closed, sunk and dimmed, no z's and no breathing |
+
+Out of range takes a direction: price above the range leans up, price below leans down.
+
+## Where each state plays
+
+| Screen | What moves |
+| --- | --- |
+| Bots overview (`/bots`) | Cards: Still, Dozing when stopped, Looks at you on hover. One-shots one bot at a time: Order filled every few seconds, Stopping, Starting then Connecting, Needs help once per bot when the Error tab opens. |
+| Bot Detail (`/bots/[id]`) | Header face: Running (follows the pointer), Watching the market or Placing orders by activity, Out of range up or down, Waiting for you (Add funds notice), Needs help (Update keys notice), Stopped, Starting then Connecting, Order filled with a new line in Recent trades. Hover shows Looks at you. |
+| Avatar editor | Looks at you; Randomize plays Order filled once. |
+
+The overview and Bot Detail have a foldable "Motion prototype" panel to trigger the rare events. It is
+for the team only and is not part of the product.
+
 ## Rules
 
 1. One-shots answer an event and play once. Loops show a state that lasts and play only where one
    bot is on screen (Bot Detail header, avatar editor, confirmation steps).
-2. On the Bots grid faces stay still and blink. One bot at a time may play a one-shot (an order
-   fill), at most one every few seconds.
+2. On the Bots grid faces stay still and blink (state Still). One bot at a time may play a one-shot
+   (an order fill), at most one every few seconds.
 3. Status tag and glyph still carry the status; motion never replaces them.
 4. No moods tied to P&L.
 5. Reduced motion: faces are still and blinks are off.

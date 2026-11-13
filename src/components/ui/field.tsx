@@ -52,12 +52,15 @@ export function PinInput({
   length = 6,
   autoFocus,
   label = "PIN",
+  tone = "default",
 }: {
   value: string;
   onChange: (value: string) => void;
   length?: number;
   autoFocus?: boolean;
   label?: string;
+  /** "bots": 2026 Bots style, tall boxes with a 1px border that brightens once filled. */
+  tone?: "default" | "bots";
 }) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = Array.from({ length }, (_, i) => value[i] ?? "");
@@ -100,7 +103,14 @@ export function PinInput({
             refs.current[Math.min(pasted.length, length - 1)]?.focus();
           }}
           placeholder="0"
-          className="aspect-[68/92] w-full min-w-0 bg-fill-2 text-center font-display text-[28px] text-white caret-brand outline-none placeholder:text-white/20 focus:bg-fill-3 focus:ring-1 focus:ring-brand/60"
+          className={
+            tone === "bots"
+              ? cn(
+                  "h-24 w-full min-w-0 rounded-[4px] border text-center font-display text-[32px] leading-none text-white/90 caret-white outline-none placeholder:text-white/30 focus:border-white/60 sm:h-32",
+                  d ? "border-white/20 bg-white/5" : "border-white/10 bg-white/[0.03]",
+                )
+              : "aspect-[68/92] w-full min-w-0 bg-fill-2 text-center font-display text-[28px] text-white caret-brand outline-none placeholder:text-white/20 focus:bg-fill-3 focus:ring-1 focus:ring-brand/60"
+          }
         />
       ))}
     </div>

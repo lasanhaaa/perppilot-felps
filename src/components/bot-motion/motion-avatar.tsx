@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef, type CSSProperties } from "react";
 import { variantToStyle, type BotAvatarVariant } from "@/components/ui/bot-avatar";
 import { BOT_AVATAR_DARK, botAvatarParts, type BotAvatar as BotAvatarLook } from "@/lib/bot-avatar";
 import {
@@ -143,6 +143,8 @@ type Runtime = {
   /** Continuous head yaw target (spins keep counting), and the springs that follow the targets. */
   yawT: number;
   springs: Springs | null;
+  /** Every spring is at rest on its target (static states then stop drawing). */
+  settled: boolean;
 };
 
 type Config = {
@@ -154,6 +156,7 @@ type Config = {
   followPointer: boolean;
   loop: boolean;
   seed: number;
+  dir?: -1 | 1;
 };
 
 /**
@@ -175,7 +178,9 @@ export function MotionAvatar({
   loop = true,
   seed = 0,
   playKey = 0,
+  dir,
   className,
+  style: styleProp,
   label,
 }: {
   avatar: BotAvatarLook;
@@ -191,11 +196,14 @@ export function MotionAvatar({
   loop?: boolean;
   seed?: number;
   playKey?: number;
+  /** Out of range: -1 the price is above the range, 1 below. */
+  dir?: -1 | 1;
   className?: string;
+  style?: CSSProperties;
   label?: string;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const cfg = useRef<Config>({ state, playKey, intensity, speed, paused, followPointer, loop, seed });
+  const cfg = useRef<Config>({ state, playKey, intensity, speed, paused, followPointer, loop, seed, dir });
   const rtRef = useRef<Runtime | null>(null);
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const clipId = `bot-clip-${uid}`;
@@ -204,8 +212,8 @@ export function MotionAvatar({
   const parts = useMemo(() => botAvatarParts(avatar, style, face), [avatar, style, face]);
 
   useEffect(() => {
-    cfg.current = { state, playKey, intensity, speed, paused, followPointer, loop, seed };
-  }, [state, playKey, intensity, speed, paused, followPointer, loop, seed]);
+    cfg.current = { state, playKey, intensity, speed, paused, followPointer, loop, seed, dir };
+  }, [state, playKey, intensity, speed, paused, followPointer, loop, seed, dir]);
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -273,6 +281,7 @@ export function MotionAvatar({
       rt.blinkStart = -10;
       rt.blinkAt = rt.t + (def.blink ? def.blink[0] * (0.4 + 0.6 * hash(c.seed, rt.blinkSeq++)) : 1e9);
       rt.drawn = false;
+      rt.settled = false;
     };
 
     const fresh = !rtRef.current;
@@ -293,6 +302,7 @@ export function MotionAvatar({
         drawn: false,
         yawT: 0,
         springs: null,
+        settled: false,
       };
       reset(rt, c, false);
       // Start loops at a different moment per bot so a grid never moves in sync.
@@ -538,8 +548,11 @@ export function MotionAvatar({
         }
       }
 
+      // Static states (the grid): once settled and between blinks, the frame would not change.
+      if (def.static && rt.settled && !changed && !rt.from && rt.t - rt.blinkStart > BLINK + 0.1) return;
+
       // 1. Keyed pose for this moment, blended out of the previous state.
-      const ctx = { seed: c.seed, look: rt.lookActive ? rt.look : null, loop: c.loop };
+      const ctx = { seed: c.seed, look: rt.lookActive ? rt.look : null, loop: c.loop, dir: c.dir };
       const out = evaluate(def, rt.t, ctx, c.intensity);
       let target = out.pose;
       let yaw = out.yaw;
@@ -570,6 +583,7 @@ export function MotionAvatar({
         rt.springs = Object.fromEntries(SPRING_KEYS.map((k) => [k, { x: goal[k], v: 0 }])) as Springs;
       } else stepSprings(rt.springs, goal, step);
       const sp = rt.springs;
+      rt.settled = SPRING_KEYS.every((k) => Math.abs(sp[k].v) < 0.002 && Math.abs(sp[k].x - goal[k]) < 0.002);
       const pose: Pose = { ...target };
       for (const k of SPRING_KEYS) if (k !== "yaw") pose[k] = sp[k].x;
 
@@ -616,7 +630,7 @@ export function MotionAvatar({
       // the animation then blends out of it.
       const c = cfg.current;
       const def = MOTION_BY_ID[rt.state];
-      const still = evaluate(def, def.still, { seed: c.seed, look: null }, c.intensity);
+      const still = evaluate(def, def.still, { seed: c.seed, look: null, dir: c.dir }, c.intensity);
       rt.last = { pose: still.pose, yaw: wrapAngle(still.yaw) };
       rt.yawT = rt.last.yaw;
       draw(still.pose, still.yaw, def.still);
@@ -643,7 +657,7 @@ export function MotionAvatar({
       aria-label={label}
       aria-hidden={label ? undefined : true}
       className={className}
-      style={{ overflow: "visible" }}
+      style={{ overflow: "visible", ...styleProp }}
     >
       <defs>
         <clipPath id={clipId} clipPathUnits="userSpaceOnUse">

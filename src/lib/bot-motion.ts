@@ -167,6 +167,8 @@ export type MotionContext = {
   look: { x: number; y: number } | null;
   /** One-shots replay (gallery); they may then animate their own exit. */
   loop?: boolean;
+  /** Where the price went for Out of range: -1 above the range, 1 below. Alternates when unset. */
+  dir?: -1 | 1;
 };
 
 export type MotionGroup = "Lifecycle" | "Working" | "Attention";
@@ -174,7 +176,9 @@ export type MotionGroup = "Lifecycle" | "Working" | "Attention";
 export type MotionStateId =
   | "spawning" | "waking" | "idle" | "stopping" | "sleeping"
   | "connecting" | "thinking" | "scanning" | "working" | "filled" | "done"
-  | "looking" | "waiting" | "outOfRange" | "alert";
+  | "looking" | "waiting" | "outOfRange" | "alert"
+  /** Grid states (not in the gallery): a still face that only blinks, and a dimmed closed one. */
+  | "still" | "dozing";
 
 export type MotionState = {
   id: MotionStateId;
@@ -198,6 +202,8 @@ export type MotionState = {
   enter?: "cut";
   /** Time shown when motion is paused (reduced motion). */
   still: number;
+  /** The pose never changes (only blinks): the renderer stops drawing once the springs settle. */
+  static?: true;
   pose: (t: number, ctx: MotionContext) => Partial<Pose>;
 };
 
@@ -697,11 +703,11 @@ export const MOTION_STATES: readonly MotionState[] = [
     kind: "loop",
     blink: [2.5, 5],
     still: 1.8,
-    pose: (t) => {
+    pose: (t, ctx) => {
       const half = 4.6;
       const i = Math.floor(t / half);
       const u = t - i * half;
-      const dir = i % 2 === 0 ? -1 : 1;
+      const dir = ctx.dir ?? (i % 2 === 0 ? -1 : 1);
       const eyes = kf(u, [[0, 0], [0.1, 1, EASE.snap], [0.42, 1], [0.5, 0, EASE.snap], [0.88, 0], [0.98, 1, EASE.snap], [4.1, 1], [4.3, 0, EASE.inOut]]);
       const head = kf(u, [[0.04, 0], [0.3, 0.3, EASE.inOut], [0.44, 0.3], [0.56, 0, EASE.out], [0.92, 0], [1.38, 1, EASE.inOut], [4.06, 1], [4.5, 0, EASE.inOut]]);
       const surprise = kf(u, [[0.48, 0], [0.58, 1, EASE.out], [0.98, 0, EASE.inOut]]);
@@ -757,7 +763,41 @@ export const MOTION_STATES: readonly MotionState[] = [
   },
 ];
 
-export const MOTION_BY_ID = Object.fromEntries(MOTION_STATES.map((s) => [s.id, s])) as Record<
+/**
+ * Quiet states for screens with many bots (the Bots grid): a face that holds still and only
+ * blinks, and a stopped face with the eyes closed and dimmed. No z's, no breathing, so a grid
+ * of twenty bots costs nothing while nothing happens.
+ */
+export const GRID_STATES: readonly MotionState[] = [
+  {
+    id: "still",
+    name: "Still",
+    group: "Lifecycle",
+    when: "A running bot on the Bots grid while nothing happens.",
+    motion: "Faces you and blinks now and then.",
+    where: "Bots grid.",
+    kind: "loop",
+    blink: [3.2, 7],
+    still: 0,
+    static: true,
+    pose: () => ({}),
+  },
+  {
+    id: "dozing",
+    name: "Stopped (grid)",
+    group: "Lifecycle",
+    when: "A stopped bot on the Bots grid.",
+    motion: "Eyes closed, dimmed, head a little low. Does not move.",
+    where: "Bots grid.",
+    kind: "loop",
+    blink: null,
+    still: 0,
+    static: true,
+    pose: () => ({ openL: 0, openR: 0, gy: 0.45, y: 3, sq: 0.06, rot: -2.5, tilt: -1.6, alpha: 0.55, eye: 0.95 }),
+  },
+];
+
+export const MOTION_BY_ID = Object.fromEntries([...MOTION_STATES, ...GRID_STATES].map((s) => [s.id, s])) as Record<
   MotionStateId,
   MotionState
 >;

@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, type PointerEvent } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons";
 import { CoinIcon, EXCHANGES, ExchangeGlyph } from "@/components/brand";
-import { BotAvatar, type BotAvatarVariant } from "@/components/ui/bot-avatar";
+import type { BotAvatarVariant } from "@/components/ui/bot-avatar";
+import { MotionFace } from "@/components/bot-motion/motion-face";
+import type { BotAvatar } from "@/lib/bot-avatar";
+import type { MotionStateId } from "@/lib/bot-motion";
 import { formatDuration, formatPct, formatUsd, toneOf } from "@/lib/format";
 import { getAccount } from "@/lib/mock-data";
 import { sparkline } from "@/lib/series";
@@ -13,8 +16,8 @@ import type { Bot } from "@/lib/types";
 import { kindLabel } from "./bot-labels";
 import { Sparkline } from "./sparkline";
 
-/** Short-lived moments the overview plays on a card (see docs/bot-avatars.md, "Motion"). */
-export type BotPhase = "waking" | "starting" | "stopping";
+/** Lifecycle moments the overview shows on a card's status (see docs/bot-motion.md). */
+export type BotPhase = "starting" | "stopping";
 
 /** Gains in earnings green, losses in red (never brand mint). */
 const valueColor = {
@@ -23,11 +26,13 @@ const valueColor = {
   neutral: "text-white/60",
 };
 
-type PillTone = "positive" | "negative" | "neutral";
+type PillTone = "positive" | "negative" | "neutral" | "pending";
 const pillTone: Record<PillTone, string> = {
   positive: "bg-[#4ADE80]/10 text-[#4ADE80]",
   negative: "bg-danger/10 text-danger",
   neutral: "bg-white/10 text-white/60",
+  /** Starting / stopping: in progress = amber, never brand mint. */
+  pending: "bg-[#FFB547]/10 text-[#FFB547]",
 };
 
 /** Status tag of the new Bots style: no dot, 4px radius. */
@@ -58,50 +63,33 @@ function CardRangePill({ status }: { status: Bot["rangeStatus"] }) {
   return <CardPill tone="neutral">No result</CardPill>;
 }
 
-const LOOK = { x: 3.5, y: 2, reach: 180 };
-
 export function BotCard({
   bot,
+  look,
   variant = "tech",
-  blink = 0,
+  motion,
+  playKey = 0,
   phase,
-  allowLook = true,
+  paused = false,
 }: {
   bot: Bot;
+  look: BotAvatar;
   variant?: BotAvatarVariant;
-  /** Bumped by the overview on every order fill. */
-  blink?: number;
+  /** What the face does now; set by the overview (fills, stop, start, range exits). */
+  motion: MotionStateId;
+  playKey?: number;
   phase?: BotPhase;
-  /** False when the user asked the system to reduce motion. */
-  allowLook?: boolean;
+  /** The user asked the system to reduce motion. */
+  paused?: boolean;
 }) {
   const account = getAccount(bot.accountId);
-  const cardRef = useRef<HTMLAnchorElement>(null);
-  const avatarRef = useRef<HTMLSpanElement>(null);
+  const [hovered, setHovered] = useState(false);
 
   const noResult = bot.rangeStatus === "no-result";
   const tone = noResult ? "neutral" : toneOf(bot.netFees);
   const trend = noResult ? "flat" : bot.netFees >= 0 ? "up" : "down";
-  const stopped = bot.runState === "stopped";
-  const closed = stopped || phase === "stopping" || phase === "waking";
-  const canLook = allowLook && !closed && !phase;
-
-  const setLook = (x: number, y: number) => {
-    const el = cardRef.current;
-    if (!el) return;
-    el.style.setProperty("--look-x", `${x.toFixed(2)}px`);
-    el.style.setProperty("--look-y", `${y.toFixed(2)}px`);
-  };
-
-  const onPointerMove = (e: PointerEvent<HTMLAnchorElement>) => {
-    if (!canLook || e.pointerType !== "mouse" || !avatarRef.current) return;
-    const r = avatarRef.current.getBoundingClientRect();
-    const dx = e.clientX - (r.left + r.width / 2);
-    const dy = e.clientY - (r.top + r.height / 2);
-    const dist = Math.hypot(dx, dy) || 1;
-    const reach = Math.min(1, dist / LOOK.reach);
-    setLook((dx / dist) * LOOK.x * reach, (dy / dist) * LOOK.y * reach);
-  };
+  // Hovering a quiet card: that bot looks at you (one bot at a time, so the grid stays calm).
+  const state: MotionStateId = hovered && motion === "still" ? "looking" : motion;
 
   const status =
     phase === "stopping"
@@ -116,11 +104,10 @@ export function BotCard({
 
   return (
     <Link
-      ref={cardRef}
       href={`/bots/${bot.id}`}
       data-bot-id={bot.id}
-      onPointerMove={onPointerMove}
-      onPointerLeave={() => setLook(0, 0)}
+      onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       className={cn(
         "group flex min-w-0 flex-col rounded-[4px] border border-line bg-fill-1 transition-[background-color,opacity] duration-300 hover:bg-fill-2 focus-visible:bg-fill-2",
         phase === "stopping" && "opacity-70",
@@ -128,18 +115,17 @@ export function BotCard({
     >
       <div className="border-b border-line py-6">
         <div className="flex items-center gap-4 px-5 2xl:gap-[21px]">
-          <span ref={avatarRef} className="shrink-0">
-            <BotAvatar
-              seed={bot.avatarSeed}
-              variant={variant}
-              size={54}
-              pose={closed ? "closed" : "open"}
-              blink={blink}
-              scanning={phase === "starting"}
-              dimmed={stopped}
-              className="size-[44px] sm:size-[54px]"
-            />
-          </span>
+          <MotionFace
+            avatar={look}
+            variant={variant}
+            state={state}
+            playKey={playKey}
+            seed={bot.avatarSeed}
+            paused={paused}
+            size={54}
+            dir={bot.seed % 2 ? -1 : 1}
+            className="max-sm:size-11!"
+          />
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex items-start justify-between gap-3">
               <p className="flex min-w-0 items-center gap-1.5 text-[18px] leading-[1.5] whitespace-nowrap text-white/80">
@@ -153,7 +139,7 @@ export function BotCard({
               </p>
               <span className="shrink-0">
                 {phase ? (
-                  <CardPill tone="neutral">{status}</CardPill>
+                  <CardPill tone="pending">{status}</CardPill>
                 ) : (
                   <CardRangePill status={bot.rangeStatus} />
                 )}
