@@ -1,4 +1,5 @@
 import type { Account, Bot, ChangelogEntry, CourseModule } from "./types";
+import { botSeedSequence } from "./bot-avatar";
 
 /*
  * Mock data standing in for the Perpilot API. Values follow the Figma screens
@@ -47,6 +48,8 @@ const seeds: BotSeed[] = [
   { pair: "ETH-USD", group: "points", rangeStatus: "in-range", runState: "stopped", accountId: "acc-pointbot", netFees: 41.05, apr: 7.7 },
 ];
 
+const avatarSeeds = botSeedSequence(20261113, seeds.length);
+
 export const bots: Bot[] = seeds.map((s, i) => {
   const noResult = s.rangeStatus === "no-result";
   return {
@@ -65,6 +68,7 @@ export const bots: Bot[] = seeds.map((s, i) => {
     leverage: 50,
     network: "Mainnet",
     seed: 1000 + i * 37,
+    avatarSeed: avatarSeeds[i],
     ...s,
   };
 });

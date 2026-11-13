@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons";
 import { EXCHANGES, ExchangeGlyph } from "@/components/brand";
+import { BotAvatar } from "@/components/ui/bot-avatar";
 import { Chip, StatusPill, ValueBox } from "@/components/ui/tag";
 import { formatDate, formatDuration, formatK, formatPct, formatUsd, toneOf } from "@/lib/format";
 import { getAccount } from "@/lib/mock-data";
@@ -33,28 +34,33 @@ export function BotCard({ bot }: { bot: Bot }) {
       href={`/bots/${bot.id}`}
       className="group flex flex-col bg-fill-2 p-5 transition-colors hover:bg-fill-3 focus-visible:bg-fill-3"
     >
-      <div className="flex flex-col gap-1 border-b border-line pb-4">
-        <div className="flex items-start justify-between gap-3">
-          <p className="flex items-center gap-1.5 font-display text-[18px] leading-[1.5] text-white/80">
-            {bot.pair}
-            <span aria-hidden className="size-1 rounded-full bg-white/60" />
-            {kindLabel(bot.kind)}
-          </p>
-          <RangePill status={bot.rangeStatus} />
-        </div>
-        <div className="flex items-center justify-between gap-3 text-[14px] font-medium uppercase text-white/40">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate">{account?.name ?? "Account"}</span>
-            {account && (
-              <Chip>
-                <ExchangeGlyph id={account.exchange} size={20} className="opacity-60" />
-                {EXCHANGES[account.exchange].name}
-              </Chip>
-            )}
-          </span>
-          <span className="shrink-0 whitespace-nowrap tabular">
-            [ {formatK(bot.rangeLow)} - {formatK(bot.rangeHigh).slice(1)} ]
-          </span>
+      <div className="flex items-center gap-4 border-b border-line pb-4">
+        <BotAvatar seed={bot.avatarSeed} size={56} className="size-[42px] 2xl:size-14" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-start justify-between gap-3">
+            <p className="flex min-w-0 items-center gap-1.5 whitespace-nowrap font-display text-[18px] leading-[1.5] text-white/80">
+              <span className="shrink-0">{bot.pair}</span>
+              <span aria-hidden className="size-1 shrink-0 rounded-full bg-white/60" />
+              <span className="truncate">{kindLabel(bot.kind)}</span>
+            </p>
+            <span className="shrink-0">
+              <RangePill status={bot.rangeStatus} />
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-[14px] font-medium uppercase text-white/40">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate">{account?.name ?? "Account"}</span>
+              {account && (
+                <Chip>
+                  <ExchangeGlyph id={account.exchange} size={20} className="opacity-60" />
+                  {EXCHANGES[account.exchange].name}
+                </Chip>
+              )}
+            </span>
+            <span className="shrink-0 whitespace-nowrap tabular">
+              [ {formatK(bot.rangeLow)} - {formatK(bot.rangeHigh).slice(1)} ]
+            </span>
+          </div>
         </div>
       </div>
 

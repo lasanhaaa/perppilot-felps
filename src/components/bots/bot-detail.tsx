@@ -1,5 +1,6 @@
 "use client";
 
+import { BotAvatar } from "@/components/ui/bot-avatar";
 import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
@@ -150,6 +151,7 @@ export function BotDetail({ bot }: { bot: Bot }) {
           <button type="button" aria-label="Back" onClick={() => router.push("/bots")} className="grid size-12 shrink-0 place-items-center bg-fill-2 text-white/80 hover:bg-white/10">
             <Icon name="arrow-back" size={24} />
           </button>
+          <BotAvatar seed={bot.avatarSeed} size={56} />
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">
               <h1 className="font-display text-[24px] leading-[1.2]">{bot.pair}</h1>
