@@ -1,4 +1,5 @@
 import type { Account, Bot, ChangelogEntry, CourseModule } from "./types";
+import { uniqueBotSeeds } from "./bot-avatar";
 
 /*
  * Mock data standing in for the Perpilot API. Values follow the Figma screens
@@ -47,6 +48,9 @@ const seeds: BotSeed[] = [
   { pair: "ETH-USD", group: "points", rangeStatus: "in-range", runState: "stopped", accountId: "acc-pointbot", netFees: 41.05, apr: 7.7 },
 ];
 
+// Looks never repeat inside the account (the backend keeps (user_id, avatar_signature) unique).
+const avatarSeeds = uniqueBotSeeds(20261113, seeds.length);
+
 export const bots: Bot[] = seeds.map((s, i) => {
   const noResult = s.rangeStatus === "no-result";
   return {
@@ -65,6 +69,7 @@ export const bots: Bot[] = seeds.map((s, i) => {
     leverage: 50,
     network: "Mainnet",
     seed: 1000 + i * 37,
+    avatarSeed: avatarSeeds[i],
     ...s,
   };
 });
@@ -157,3 +162,133 @@ export const markets = [
 
 /** Exchanges available when connecting a new account. */
 export const exchangeOrder = ["grvt", "extended", "hyperliquid", "lighter", "nado"] as const;
+
+// ── Bot Detail (2026 Bots style) ─────────────────────────────────────────────
+
+/** "Now" of the demo, fixed so server and client render the same dates (Nov 3, 2026, 8pm UTC). */
+export const DEMO_NOW = Date.UTC(2026, 10, 3, 20, 0);
+
+const MARKS: Record<string, number> = { BTC: 64571, ETH: 3412.18, SOL: 148.92, HYPE: 38.21 };
+
+function rng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export type RangeSide = "in" | "above" | "below" | "none";
+export type Trade = { id: string; side: "buy" | "sell"; size: number; price: number; age: string };
+
+/**
+ * Everything Bot Detail shows for one bot, scaled from the Figma numbers (BTC-USD on Main) to
+ * the bot's market. Out-of-range bots get a mark price outside their range.
+ */
+export function botDetail(bot: Bot) {
+  const base = bot.pair.split("-")[0];
+  const k = (MARKS[base] ?? MARKS.BTC) / MARKS.BTC;
+  const s = botDetailStats;
+  const min = s.range.min * k;
+  const max = s.range.max * k;
+  const side: RangeSide =
+    bot.rangeStatus === "no-result" ? "none" : bot.rangeStatus === "in-range" ? "in" : bot.seed % 2 ? "above" : "below";
+  const mark = side === "above" ? max * 1.028 : side === "below" ? min * 0.972 : s.mark * k;
+  const sizeUnit = Math.max(0.00001, +(0.00031 / k).toPrecision(2));
+  const r = rng(bot.seed);
+  const ages = ["12m", "41m", "1h", "2h", "3h", "4h", "5h", "6h"];
+  const sides: Trade["side"][] = ["sell", "buy", "sell", "buy", "buy", "sell", "buy", "sell"];
+  const trades: Trade[] = ages.map((age, i) => ({
+    id: `${bot.id}-t${i}`,
+    side: sides[i],
+    size: sizeUnit,
+    price: mark * (1 + (r() - 0.5) * 0.012),
+    age,
+  }));
+  const started = DEMO_NOW - bot.runningMinutes * 60_000;
+  const equity = bot.equity ?? 0;
+  const equityStart = s.equityStart;
+  return {
+    base,
+    k,
+    side,
+    mark,
+    min,
+    max,
+    low: s.low * k,
+    high: s.high * k,
+    start: s.start * k,
+    started,
+    trades,
+    sizeUnit,
+    equity,
+    equityStart,
+    equityChangePct: equityStart ? ((equity - equityStart) / equityStart) * 100 : 0,
+    markChangePct: ((mark - s.start * k) / (s.start * k)) * 100,
+    position: {
+      ...s.position,
+      size: +(s.position.size / k).toPrecision(3),
+      avgEntry: s.position.avgEntry * k,
+      startPrice: s.position.startPrice * k,
+      market: mark,
+      marketVsEntryPct: ((mark - s.position.avgEntry * k) / (s.position.avgEntry * k)) * 100,
+    },
+    range: { ...s.range, min, max, assetStart: s.range.assetStart * k },
+  };
+}
+export type BotDetailData = ReturnType<typeof botDetail>;
+
+export type EarningsPeriod = "1D" | "7D" | "30D" | "All";
+
+/** Net fees since start, hourly, ending at the bot's net fees. */
+export function earningsSeries(bot: Bot, period: EarningsPeriod) {
+  const hours = Math.max(24, Math.round(bot.runningMinutes / 60));
+  const r = rng(bot.seed + 7);
+  const sign = bot.netFees < 0 ? -1 : 1;
+  const raw: number[] = [];
+  let v = 0;
+  for (let i = 0; i < hours; i++) {
+    // Busy and quiet stretches, a few small giveback hours.
+    const busy = 0.4 + 0.6 * Math.abs(Math.sin(i / 37 + bot.seed));
+    v += (r() * busy - (r() < 0.12 ? 0.35 : 0)) * 1;
+    raw.push(v);
+  }
+  const end = raw[raw.length - 1] || 1;
+  const all = raw.map((x) => (x / end) * Math.abs(bot.netFees) * sign);
+  const span = { "1D": 24, "7D": 24 * 7, "30D": 24 * 30, All: hours }[period];
+  const tail = all.slice(-Math.min(span, all.length));
+  const stepped = tail.length > 120 ? tail.filter((_, i) => i % Math.ceil(tail.length / 120) === 0 || i === tail.length - 1) : tail;
+  const startT = DEMO_NOW - (tail.length - 1) * 3_600_000;
+  const at = (i: number) => startT + (i / Math.max(1, stepped.length - 1)) * (tail.length - 1) * 3_600_000;
+  return { values: stepped, at };
+}
+
+export type MarketFrame = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+const FRAME_MS: Record<MarketFrame, number> = { "1m": 60e3, "5m": 300e3, "15m": 900e3, "1h": 3600e3, "4h": 14400e3, "1d": 86400e3 };
+
+/** Market price around the bot's entry, one point per candle of the chosen frame. */
+export function marketSeries(bot: Bot, detail: BotDetailData, frame: MarketFrame) {
+  const frames: MarketFrame[] = ["1m", "5m", "15m", "1h", "4h", "1d"];
+  const fi = frames.indexOf(frame);
+  const r = rng(bot.seed * 31 + fi * 977);
+  const n = 160;
+  const entry = detail.position.avgEntry;
+  const vol = 0.0012 * (1 + fi * 0.45);
+  const out: number[] = [];
+  let v = entry * (1 - vol * 6);
+  for (let i = 0; i < n; i++) {
+    const jump = r() < 0.05 ? (r() - 0.45) * vol * 9 : 0;
+    // Pulled back toward the entry so the line keeps crossing it, like a ranging market.
+    v = v * (1 + (r() - 0.5) * vol * 2 + jump) + (entry - v) * 0.02;
+    out.push(v);
+  }
+  // End on the current mark.
+  const shift = detail.mark - out[n - 1];
+  const values = out.map((x, i) => x + shift * (i / (n - 1)) ** 2);
+  const ms = FRAME_MS[frame];
+  const at = (i: number) => DEMO_NOW - (n - 1 - i) * ms;
+  return { values, at, ms };
+}

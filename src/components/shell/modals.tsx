@@ -8,28 +8,25 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/icons";
 import { BotTypeLogo } from "@/components/brand";
 
-/** "Create a new bot": pick V3 Bot or PointBot. */
+/** "Create a new bot": pick V3 Bot or PointBot (Figma: Bots Overview + Create a new bot, 2026 style). */
 export function NewBotModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const options = [
     { type: "v3" as const, title: "V3 Bot", text: "Advanced V3 Liquidity Pool automation on a single exchange." },
     { type: "pointbot" as const, title: "PointBot", text: "Cross-exchange arbitrage between multiple exchanges" },
   ];
   return (
-    <Modal open={open} onClose={onClose} title="Create a new bot" description="Choose the type of bot you want to deploy" className="sm:w-[640px]">
-      <div className="flex flex-col gap-2">
-        {options.map((o, i) => (
+    <Modal open={open} onClose={onClose} tone="bots" title="Create a new bot" description="Choose the type of bot you want to deploy" className="sm:w-[640px]">
+      <div className="flex flex-col gap-3">
+        {options.map((o) => (
           <Link
             key={o.type}
             href={`/bots/new?type=${o.type}`}
             onClick={onClose}
-            className={
-              "group flex items-center gap-4 border-t bg-fill-2 p-4 transition-colors hover:bg-fill-3 " +
-              (i === 0 ? "border-brand" : "border-white/20")
-            }
+            className="group flex items-center gap-4 rounded-[4px] border border-line bg-fill-1 p-4 transition-colors hover:border-white/20 hover:bg-fill-2"
           >
-            <BotTypeLogo type={o.type} />
+            <BotTypeLogo type={o.type} tone="mono" />
             <span className="flex flex-1 flex-col">
-              <span className="text-[16px]">{o.title}</span>
+              <span className="text-[16px] font-medium">{o.title}</span>
               <span className="text-[14px] text-white/60">{o.text}</span>
             </span>
             <Icon name="arrow-forward" size={24} className="text-white/60 transition-transform group-hover:translate-x-1 group-hover:text-white" />

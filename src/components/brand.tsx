@@ -118,7 +118,7 @@ export function BtcLogo({ size = 40, className }: { size?: number; className?: s
 }
 
 /** Bot type tiles from the "Create a new bot" modal. */
-export function BotTypeLogo({ type, size = 40 }: { type: "v3" | "pointbot"; size?: number }) {
+export function BotTypeLogo({ type, size = 40, tone = "brand" }: { type: "v3" | "pointbot"; size?: number; tone?: "brand" | "mono" }) {
   if (type === "pointbot") {
     return (
       <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" className="shrink-0">
@@ -129,10 +129,39 @@ export function BotTypeLogo({ type, size = 40 }: { type: "v3" | "pointbot"; size
   }
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" className="shrink-0">
-      <rect width="40" height="40" fill="#2FE8B4" />
+      <rect width="40" height="40" fill={tone === "mono" ? "#FFFFFF" : "#2FE8B4"} />
       <g transform="translate(8 8)">
         <path d="M5 20V15.9575C5 15.5128 5.15817 15.1331 5.4745 14.8183C5.79083 14.5036 6.17117 14.3463 6.6155 14.3463H17.3845C17.8288 14.3463 18.2092 14.5044 18.5255 14.8208C18.8418 15.1371 19 15.5173 19 15.9615V20H5ZM9.2885 12.577C8.102 12.577 7.09058 12.1588 6.25425 11.3225C5.41808 10.4863 5 9.475 5 8.2885C5 7.102 5.41808 6.09058 6.25425 5.25425C7.09058 4.41808 8.102 4 9.2885 4H14.7115C15.898 4 16.9094 4.41808 17.7458 5.25425C18.5819 6.09058 19 7.102 19 8.2885C19 9.475 18.5819 10.4863 17.7458 11.3225C16.9094 12.1588 15.898 12.577 14.7115 12.577H9.2885ZM6 19H18V15.9615C18 15.782 17.9423 15.6346 17.827 15.5192C17.7115 15.4039 17.564 15.3463 17.3845 15.3463H6.6155C6.436 15.3463 6.2885 15.4039 6.173 15.5192C6.05767 15.6346 6 15.782 6 15.9615V19ZM9.2885 11.577H14.7115C15.6347 11.577 16.4135 11.2597 17.048 10.625C17.6827 9.99033 18 9.2115 18 8.2885C18 7.36533 17.6827 6.5865 17.048 5.952C16.4135 5.31733 15.6347 5 14.7115 5H9.2885C8.36533 5 7.5865 5.31733 6.952 5.952C6.31733 6.5865 6 7.36533 6 8.2885C6 9.2115 6.31733 9.99033 6.952 10.625C7.5865 11.2597 8.36533 11.577 9.2885 11.577Z" />
       </g>
     </svg>
+  );
+}
+
+const COINS: Record<string, { bg: string; fg: string; mark: string }> = {
+  ETH: { bg: "#627EEA", fg: "#fff", mark: "Ξ" },
+  SOL: { bg: "#9945FF", fg: "#fff", mark: "S" },
+  HYPE: { bg: "#97FCE4", fg: "#0D1012", mark: "H" },
+};
+
+/** 20px coin mark before a pair name (Figma: "Coin / BTC"). Rounded 4px square. */
+export function CoinIcon({ pair, size = 20, className }: { pair: string; size?: number; className?: string }) {
+  const base = pair.split("-")[0].toUpperCase();
+  if (base === "BTC") {
+    return (
+      <span className={cn("inline-flex shrink-0 overflow-hidden rounded-[4px]", className)} style={{ width: size, height: size }}>
+        <BtcLogo size={size} />
+      </span>
+    );
+  }
+  const coin = COINS[base] ?? { bg: "#d6d4d6", fg: "#0D1012", mark: base.slice(0, 1) };
+  return (
+    <span
+      role="img"
+      aria-label={base}
+      className={cn("inline-flex shrink-0 items-center justify-center rounded-[4px] text-[12px] leading-none font-semibold", className)}
+      style={{ width: size, height: size, background: coin.bg, color: coin.fg }}
+    >
+      {coin.mark}
+    </span>
   );
 }
