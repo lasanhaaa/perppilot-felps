@@ -41,6 +41,14 @@ every bot a personality, while staying serious, geometric and tech. No colored e
   while Placing orders, lift on Done, and drop when the eyes close. The mouth widens on Done and
   tightens on Needs help and Thinking.
 
+## V1 Tech flat (2026-11-14)
+
+felipe asked for a version of V1 Tech that only removes the rounding and the shadows. Style
+`techflat`: the same 12 V1 Tech outlines and the same 8 V1 Tech eyes at the same size, with sharp
+corners on the heads and the bar eyes, no floor shadow and no dark side on turns. Nothing else
+changes. It sits next to V1 Tech on `/bot-styles` and in the product Face switch; the "Corners"
+dial works on it too.
+
 ## Round 2 styles (2026-11-14)
 
 Feedback: the v1 faces read too chunky and rounded. V1 (soft, tech, tech visor) stays in the code

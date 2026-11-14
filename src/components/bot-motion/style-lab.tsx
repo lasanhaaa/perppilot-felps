@@ -22,6 +22,7 @@ type StyleInfo = { id: BotAvatarVariant; name: string; note: string };
 
 const STYLES: StyleInfo[] = [
   { id: "character", name: "Character", note: "V1 Tech + personality" },
+  { id: "techflat", name: "V1 Tech flat", note: "No rounding, no shadow" },
   { id: "tech", name: "V1 Tech", note: "Backup" },
   { id: "visor", name: "V1 Visor", note: "Backup" },
   { id: "soft", name: "V1 Soft", note: "Backup" },
@@ -35,7 +36,7 @@ const STYLE_IDS = STYLES.map((s) => s.id);
 type Dial = { key: keyof BotAvatarTweak; label: string; min: number; max: number; step: number; unit: string; for: BotAvatarVariant[] };
 const DIALS: Dial[] = [
   { key: "eye", label: "Face size", min: 0.7, max: 1.4, step: 0.05, unit: "×", for: ["character", "shard", "sigil", "halo"] },
-  { key: "corner", label: "Corners", min: 0, max: 3, step: 0.25, unit: "", for: ["character"] },
+  { key: "corner", label: "Corners", min: 0, max: 3, step: 0.25, unit: "", for: ["character", "techflat"] },
   { key: "line", label: "Line weight", min: 0.75, max: 3, step: 0.25, unit: "px", for: ["sigil"] },
   { key: "detail", label: "Detail", min: 0, max: 1.6, step: 0.05, unit: "×", for: ["shard", "sigil", "halo"] },
   { key: "gap", label: "Cell gap", min: 0.4, max: 2.8, step: 0.1, unit: "", for: ["matrix"] },
@@ -171,7 +172,7 @@ export function StyleLab() {
           )}
         </header>
 
-        <section aria-label="Styles" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+        <section aria-label="Styles" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {STYLES.map((s) => (
             <button
               key={s.id}

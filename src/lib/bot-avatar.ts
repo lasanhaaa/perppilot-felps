@@ -26,10 +26,11 @@ import {
 import { CHARACTER_FACES } from "./bot-avatar-character";
 
 /**
- * "character": the V1 Tech heads, flat, with personality (bot-avatar-character). v1 faces
- * ("soft", "tech", kept as the backup) and the round 2 treatments (see bot-avatar-geo).
+ * "character": the V1 Tech heads, flat, with personality (bot-avatar-character). "techflat": V1
+ * Tech with only the rounding and the shadows removed. v1 faces ("soft", "tech", kept as the
+ * backup) and the round 2 treatments (see bot-avatar-geo).
  */
-export type BotAvatarStyle = "character" | "soft" | "tech" | GeoStyle;
+export type BotAvatarStyle = "character" | "techflat" | "soft" | "tech" | GeoStyle;
 export type BotAvatarFace = "cutout" | "visor";
 export type { GeoLayer as BotAvatarLayer, GeoTweak as BotAvatarTweak };
 export { GEO_TWEAK as BOT_AVATAR_TWEAK };
@@ -153,7 +154,7 @@ const TECH_OUTLINES: { name: string; pts: Pt[]; r: number; eye: Pt }[] = [
 
 const TECH_SHAPES: BotAvatarShape[] = TECH_OUTLINES.map((o) => ({ name: o.name, d: poly(o.pts, o.r), eye: o.eye }));
 
-/** The character heads: the same V1 Tech outlines, with corners rounded by `corner` (0 = sharp). */
+/** The character and V1 Tech flat heads: the V1 Tech outlines, with corners rounded by `corner` (0 = sharp). */
 const characterShapes = (corner: number): BotAvatarShape[] =>
   TECH_OUTLINES.map((o) => ({ name: o.name, d: poly(o.pts, Math.min(corner, o.r * 2)), eye: o.eye }));
 const CHARACTER_SHAPES = characterShapes(GEO_TWEAK.corner);
@@ -167,19 +168,23 @@ const bracket = (cx: number, y: number, side: 1 | -1, k: number) => {
 };
 const segments = (cx: number, y: number, k: number) => box(cx, y - 4 * k, 6 * k, 6 * k) + box(cx, y + 4 * k, 6 * k, 6 * k);
 
-const TECH_EYES: BotAvatarEyes[] = [
-  { name: "Bars", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 5 * k, 14 * k, 0.5), box(x + 6.5 * k, y, 5 * k, 14 * k, 0.5)] },
+/** V1 Tech eyes; `r` rounds the bar corners (0.5 in V1, 0 in V1 Tech flat). */
+const techEyes = (r: number): BotAvatarEyes[] => [
+  { name: "Bars", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 5 * k, 14 * k, r), box(x + 6.5 * k, y, 5 * k, 14 * k, r)] },
   { name: "Pixels", h: 7, draw: (x, y, k) => [box(x - 7.5 * k, y, 7 * k, 7 * k), box(x + 7.5 * k, y, 7 * k, 7 * k)] },
-  { name: "Look", h: 14, draw: (x, y, k) => [box(x - 2 * k, y - k, 5 * k, 14 * k, 0.5), box(x + 11 * k, y - k, 5 * k, 14 * k, 0.5)] },
+  { name: "Look", h: 14, draw: (x, y, k) => [box(x - 2 * k, y - k, 5 * k, 14 * k, r), box(x + 11 * k, y - k, 5 * k, 14 * k, r)] },
   { name: "Slits", h: 3, draw: (x, y, k) => [box(x - 8 * k, y, 10 * k, 3 * k), box(x + 8 * k, y, 10 * k, 3 * k)] },
-  { name: "Wink", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 5 * k, 14 * k, 0.5), box(x + 8 * k, y + 5.5 * k, 10 * k, 3 * k)] },
-  { name: "Tall", h: 18, draw: (x, y, k) => [box(x - 5 * k, y, 4 * k, 18 * k, 0.5), box(x + 5 * k, y, 4 * k, 18 * k, 0.5)] },
+  { name: "Wink", h: 14, draw: (x, y, k) => [box(x - 6.5 * k, y, 5 * k, 14 * k, r), box(x + 8 * k, y + 5.5 * k, 10 * k, 3 * k)] },
+  { name: "Tall", h: 18, draw: (x, y, k) => [box(x - 5 * k, y, 4 * k, 18 * k, r), box(x + 5 * k, y, 4 * k, 18 * k, r)] },
   { name: "Brackets", h: 14, draw: (x, y, k) => [bracket(x - 7 * k, y, 1, k), bracket(x + 7 * k, y, -1, k)] },
   { name: "Segments", h: 14, draw: (x, y, k) => [segments(x - 6.5 * k, y, k), segments(x + 6.5 * k, y, k)] },
 ];
+const TECH_EYES = techEyes(0.5);
+const TECH_FLAT_EYES = techEyes(0);
 
 export const BOT_AVATAR_PARTS: Record<BotAvatarStyle, { shapes: BotAvatarShape[]; eyes: BotAvatarEyes[] }> = {
   character: { shapes: CHARACTER_SHAPES, eyes: CHARACTER_FACES },
+  techflat: { shapes: CHARACTER_SHAPES, eyes: TECH_FLAT_EYES },
   soft: { shapes: SOFT_SHAPES, eyes: SOFT_EYES },
   tech: { shapes: TECH_SHAPES, eyes: TECH_EYES },
   shard: { shapes: GEO_SHAPE_LIST, eyes: GEO_EYES },
@@ -266,11 +271,19 @@ export function botAvatarParts(
   }
   const { shapes, eyes } = BOT_AVATAR_PARTS[style];
   const character = style === "character";
-  const shapeList = character && tweak.corner !== GEO_TWEAK.corner ? characterShapes(tweak.corner) : shapes;
+  /** Character and V1 Tech flat: sharp V1 Tech heads, no shadows. */
+  const sharp = character || style === "techflat";
+  const shapeList = sharp && tweak.corner !== GEO_TWEAK.corner ? characterShapes(tweak.corner) : shapes;
   const shape = shapeList[avatar.shape % shapeList.length];
   const eyeDef = eyes[avatar.eyes % eyes.length];
   const visor = style === "tech" && face === "visor";
-  const k = visor ? EYE_SCALE.visor : character ? EYE_SCALE.character * tweak.eye : EYE_SCALE[style];
+  const k = visor
+    ? EYE_SCALE.visor
+    : character
+      ? EYE_SCALE.character * tweak.eye
+      : style === "techflat"
+        ? EYE_SCALE.tech
+        : EYE_SCALE[style];
   const [cx, cy] = shape.eye;
   const [left, right] = eyeDef.draw(cx, cy, k);
   return {
@@ -288,8 +301,8 @@ export function botAvatarParts(
     brows: (eyeDef.brows?.(cx, cy, k) ?? null) as readonly [string, string] | null,
     mouth: eyeDef.mouth?.(cx, cy, k) ?? null,
     grid: null as number | null,
-    /** The character heads are flat: no floor shadow, no dark side on turns. */
-    flat: character,
+    /** Character and V1 Tech flat: no floor shadow, no dark side on turns. */
+    flat: sharp,
     closedScale: closedFor(eyeDef.h * k),
     label: `${shape.name}, ${eyeDef.name}, ${color.name}`,
   };

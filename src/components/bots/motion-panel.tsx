@@ -134,6 +134,7 @@ export function ProtoSegment<T extends string>({
 /** The current direction (Character), the v1 faces (the backup), then the round 2 styles from /bot-styles. */
 export const FACE_OPTIONS: { value: BotAvatarVariant; label: string }[] = [
   { value: "character", label: "Character" },
+  { value: "techflat", label: "V1 Tech flat" },
   { value: "tech", label: "V1 Tech" },
   { value: "visor", label: "V1 Visor" },
   { value: "soft", label: "V1 Soft" },
