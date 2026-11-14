@@ -21,6 +21,7 @@ import { useReducedMotion } from "@/lib/use-reduced-motion";
 type StyleInfo = { id: BotAvatarVariant; name: string; note: string; round: 1 | 2 };
 
 const STYLES: StyleInfo[] = [
+  { id: "tech2", name: "Tech 2", note: "V1 Tech, sharp and slim", round: 2 },
   { id: "shard", name: "Shard", note: "Cut stone, lit facets", round: 2 },
   { id: "sigil", name: "Sigil", note: "Outline, inner lines", round: 2 },
   { id: "matrix", name: "Matrix", note: "Pixel idea, fine grid", round: 2 },
@@ -33,9 +34,9 @@ const STYLE_IDS = STYLES.map((s) => s.id);
 
 type Dial = { key: keyof BotAvatarTweak; label: string; min: number; max: number; step: number; unit: string; for: BotAvatarVariant[] };
 const DIALS: Dial[] = [
-  { key: "eye", label: "Eye size", min: 0.7, max: 1.5, step: 0.05, unit: "×", for: ["shard", "sigil", "halo"] },
+  { key: "eye", label: "Eye size", min: 0.7, max: 1.5, step: 0.05, unit: "×", for: ["tech2", "shard", "sigil", "halo"] },
   { key: "line", label: "Line weight", min: 0.75, max: 3, step: 0.25, unit: "px", for: ["sigil"] },
-  { key: "detail", label: "Detail", min: 0, max: 1.6, step: 0.05, unit: "×", for: ["shard", "sigil", "halo"] },
+  { key: "detail", label: "Detail", min: 0, max: 1.6, step: 0.05, unit: "×", for: ["tech2", "shard", "sigil", "halo"] },
   { key: "gap", label: "Cell gap", min: 0.4, max: 2.8, step: 0.1, unit: "", for: ["matrix"] },
 ];
 
@@ -75,7 +76,7 @@ export function StyleLab() {
   const [playAnyway, setPlayAnyway] = useState(false);
   const paused = reduced && !playAnyway;
   const seeds = useMemo(() => uniqueBotSeeds(20261114, 8), []);
-  const [variant, setVariant] = useState<BotAvatarVariant>("shard");
+  const [variant, setVariant] = useState<BotAvatarVariant>("tech2");
   const [look, setLook] = useState<Look>(() => botAvatarFromSeed(seeds[0]));
   const [tweak, setTweak] = useState<BotAvatarTweak>(BOT_AVATAR_TWEAK);
   const [state, setState] = useState<MotionStateId>("idle");
@@ -160,7 +161,7 @@ export function StyleLab() {
           )}
         </header>
 
-        <section aria-label="Styles" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        <section aria-label="Styles" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
           {STYLES.map((s) => (
             <button
               key={s.id}

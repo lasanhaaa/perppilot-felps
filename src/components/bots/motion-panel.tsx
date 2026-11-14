@@ -136,6 +136,7 @@ export const FACE_OPTIONS: { value: BotAvatarVariant; label: string }[] = [
   { value: "tech", label: "V1 Tech" },
   { value: "visor", label: "V1 Visor" },
   { value: "soft", label: "V1 Soft" },
+  { value: "tech2", label: "Tech 2" },
   { value: "shard", label: "Shard" },
   { value: "sigil", label: "Sigil" },
   { value: "matrix", label: "Matrix" },

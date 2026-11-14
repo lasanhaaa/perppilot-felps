@@ -18,6 +18,8 @@ import {
   GEO_STYLES,
   GEO_TWEAK,
   MATRIX_EYES,
+  TECH2_EYES,
+  TECH2_SHAPE_LIST,
   geoParts,
   type GeoLayer,
   type GeoStyle,
@@ -160,6 +162,7 @@ const TECH_EYES: BotAvatarEyes[] = [
 export const BOT_AVATAR_PARTS: Record<BotAvatarStyle, { shapes: BotAvatarShape[]; eyes: BotAvatarEyes[] }> = {
   soft: { shapes: SOFT_SHAPES, eyes: SOFT_EYES },
   tech: { shapes: TECH_SHAPES, eyes: TECH_EYES },
+  tech2: { shapes: TECH2_SHAPE_LIST, eyes: TECH2_EYES },
   shard: { shapes: GEO_SHAPE_LIST, eyes: GEO_EYES },
   sigil: { shapes: GEO_SHAPE_LIST, eyes: GEO_EYES },
   matrix: { shapes: GEO_SHAPE_LIST, eyes: MATRIX_EYES },
@@ -230,6 +233,8 @@ export function botAvatarParts(
       eyeColor: g.eyeColor,
       eyes: g.eyes,
       grid: g.grid,
+      /** No floor shadow and no dark side on turns. */
+      flat: g.flat,
       closedScale: closedFor(g.eyeH),
       label: `${g.shapeName}, ${g.eyeName}, ${color.name}`,
     };
@@ -254,6 +259,7 @@ export function botAvatarParts(
     eyeColor: visor ? color.hex : BOT_AVATAR_DARK,
     eyes: [left, right] as const,
     grid: null as number | null,
+    flat: false,
     closedScale: closedFor(eyeDef.h * k),
     label: `${shape.name}, ${eyeDef.name}, ${color.name}`,
   };

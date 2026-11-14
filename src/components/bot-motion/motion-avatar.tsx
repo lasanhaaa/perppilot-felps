@@ -341,9 +341,10 @@ export function MotionAvatar({
       el.tilt.setAttribute("transform", `rotate(${n(p.tilt)} ${fx} ${fy})`);
 
       // Side of the head: a dark crescent on the side the face turns away from.
-      el.shade.setAttribute("opacity", `${n(0.36 * Math.abs(sinY))}`);
+      const shading = parts.flat ? 0 : 1;
+      el.shade.setAttribute("opacity", `${n(0.36 * Math.abs(sinY) * shading)}`);
       el.lit.setAttribute("transform", `translate(${n(sinY * 9 * (R / SPHERE))} 0)`);
-      el.back.setAttribute("opacity", `${n(0.32 * Math.max(0, -cosY))}`);
+      el.back.setAttribute("opacity", `${n(0.32 * Math.max(0, -cosY) * shading)}`);
 
       // Eyes on the head sphere: longitude = eye offset, the turn rotates the sphere.
       geo.eyes.forEach((e, i) => {
@@ -387,7 +388,7 @@ export function MotionAvatar({
       el.shadow.setAttribute("cx", `${n(28 + p.x)}`);
       el.shadow.setAttribute("cy", `${n(bottom + 3)}`);
       el.shadow.setAttribute("rx", `${n(17 * p.sx * lift)}`);
-      el.shadow.setAttribute("opacity", `${n(0.1 * clamp(p.alpha, 0, 1) * lift)}`);
+      el.shadow.setAttribute("opacity", `${n(0.1 * clamp(p.alpha, 0, 1) * lift * shading)}`);
 
       for (const g of el.extras) g.setAttribute("transform", `translate(${n(p.x)} ${n(p.y)})`);
 

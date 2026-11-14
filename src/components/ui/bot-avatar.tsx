@@ -12,11 +12,12 @@ import { cn } from "@/lib/cn";
 
 /**
  * How the face is drawn. v1 (the backup): the tech geometry with cut-out eyes or a visor, or the
- * soft geometry. Round 2: shard, sigil, matrix and halo (see src/lib/bot-avatar-geo.ts).
+ * soft geometry. Round 2: tech2 (V1 Tech, sharp and slim), shard, sigil, matrix and halo
+ * (see src/lib/bot-avatar-geo.ts).
  */
-export type BotAvatarVariant = "tech" | "visor" | "soft" | "shard" | "sigil" | "matrix" | "halo";
+export type BotAvatarVariant = "tech" | "visor" | "soft" | "tech2" | "shard" | "sigil" | "matrix" | "halo";
 
-export const BOT_AVATAR_VARIANTS: readonly BotAvatarVariant[] = ["tech", "visor", "soft", "shard", "sigil", "matrix", "halo"];
+export const BOT_AVATAR_VARIANTS: readonly BotAvatarVariant[] = ["tech", "visor", "soft", "tech2", "shard", "sigil", "matrix", "halo"];
 
 export function variantToStyle(variant: BotAvatarVariant): {
   style: BotAvatarStyle;

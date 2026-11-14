@@ -34,6 +34,11 @@ style):
 - same three stored indices as v1, so any saved look maps 1:1; the motion rig works on all of
   them (slim heads get a smaller turning sphere).
 
+**Tech 2** (felipe's pick to work on, 2026-11-14) is V1 Tech made sharper: the same 12 shape
+names with straight corners and 45° chamfers, bodies about 36–40 wide instead of 50, smaller sharp
+eyes (Lenses and Oracle added), fine dark engravings (seam, horizon, glyph, ticks, frame, chin)
+tuned by the Detail dial, and no shadows: no floor shadow and no dark side when the head turns.
+
 The "Face" switch in both Motion prototype panels shows every style on the real screens.
 
 ## Data rules
