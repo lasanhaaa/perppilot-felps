@@ -1,7 +1,7 @@
 "use client";
 
 import type { BotAvatarVariant } from "@/components/ui/bot-avatar";
-import type { BotAvatar } from "@/lib/bot-avatar";
+import type { BotAvatar, BotAvatarTweak } from "@/lib/bot-avatar";
 import type { MotionStateId } from "@/lib/bot-motion";
 import { cn } from "@/lib/cn";
 import { MotionAvatar } from "./motion-avatar";
@@ -27,6 +27,7 @@ export function MotionFace({
   dir,
   className,
   label,
+  tweak,
 }: {
   avatar: BotAvatar;
   variant?: BotAvatarVariant;
@@ -41,6 +42,7 @@ export function MotionFace({
   dir?: -1 | 1;
   className?: string;
   label?: string;
+  tweak?: BotAvatarTweak;
 }) {
   const rig = Math.round(size / FACE);
   return (
@@ -62,6 +64,7 @@ export function MotionFace({
         followPointer={followPointer}
         loop={loop}
         dir={dir}
+        tweak={tweak}
         className="pointer-events-none absolute"
         style={{ left: "-39.2857%", top: "-50%", width: `${100 / FACE}%`, height: `${100 / FACE}%` }}
       />

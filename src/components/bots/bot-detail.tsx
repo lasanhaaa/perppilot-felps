@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { MotionFace } from "@/components/bot-motion/motion-face";
 import { PinModal } from "@/components/create-bot/pin-modal";
 import { MOTION_BY_ID, type MotionStateId } from "@/lib/bot-motion";
-import { useBotFace, useBotLook } from "@/lib/bot-look-store";
+import { setBotFace, useBotFace, useBotLook } from "@/lib/bot-look-store";
 import { formatDuration, formatUsd } from "@/lib/format";
 import {
   botDetail,
@@ -28,7 +28,7 @@ import { AvatarEditor } from "./avatar-editor";
 import { BotGlyph, GREEN, RED, RangeTag, SUCCESS, AMBER, glyphFor } from "./bot-status";
 import { DetailChart } from "./detail-chart";
 import { kindLabel } from "./bot-labels";
-import { PrototypeDock, ProtoButton, ProtoSegment } from "./motion-panel";
+import { FaceSegment, PrototypeDock, ProtoButton, ProtoSegment } from "./motion-panel";
 
 type Run = "running" | "starting" | "stopping" | "stopped" | "error";
 type View = "simple" | "advanced";
@@ -1056,6 +1056,7 @@ export function BotDetail({ bot }: { bot: Bot }) {
       />
 
       <PrototypeDock title="Motion prototype" event={event} reducedMotion={reduced}>
+        <FaceSegment value={face} onChange={setBotFace} />
         <div className="grid grid-cols-2 gap-2">
           <ProtoButton onClick={fill} disabled={run !== "running"}>
             Order fill

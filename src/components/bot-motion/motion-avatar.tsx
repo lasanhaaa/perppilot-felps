@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, type CSSProperties } from "react";
-import { variantToStyle, type BotAvatarVariant } from "@/components/ui/bot-avatar";
-import { BOT_AVATAR_DARK, botAvatarParts, type BotAvatar as BotAvatarLook } from "@/lib/bot-avatar";
+import { AvatarLayer, variantToStyle, type BotAvatarVariant } from "@/components/ui/bot-avatar";
+import { BOT_AVATAR_DARK, botAvatarParts, type BotAvatar as BotAvatarLook, type BotAvatarTweak } from "@/lib/bot-avatar";
 import {
   BLINK,
   EASE,
@@ -23,7 +23,10 @@ import {
 /** Status colors for the extras that mean status: Error/Out of range red, Completed green. */
 const RED = "#FF3737";
 const SUCCESS = "#2ABB78";
-/** Radius of the head sphere the eyes sit on, in face units (the face is 56 wide). */
+/**
+ * Radius of the head sphere the eyes sit on, in face units (the face is 56 wide). Slim heads get a
+ * smaller sphere (88% of their half width), so turning eyes stay on the face.
+ */
 const SPHERE = 22;
 /** Seconds to blend from the last pose into a new state. */
 const BLEND = 0.45;
@@ -107,6 +110,8 @@ function bindPointer() {
 }
 
 const n = (v: number) => Math.round(v * 100) / 100;
+/** Grid faces: an offset rounded to whole cells, at most one cell away. */
+const snap = (v: number, g: number) => clamp(Math.round(v / g), -1, 1) * g;
 const PROGRESS = new Set<keyof Pose>(["burst", "check", "ring", "sendDir", "arrowDir"]);
 
 function mix(a: Pose, b: Pose, k: number): Pose {
@@ -118,6 +123,7 @@ function mix(a: Pose, b: Pose, k: number): Pose {
 }
 
 type Geometry = {
+  sphere: number;
   cx: number;
   cy: number;
   top: number;
@@ -182,6 +188,7 @@ export function MotionAvatar({
   className,
   style: styleProp,
   label,
+  tweak,
 }: {
   avatar: BotAvatarLook;
   variant?: BotAvatarVariant;
@@ -201,6 +208,8 @@ export function MotionAvatar({
   className?: string;
   style?: CSSProperties;
   label?: string;
+  /** Playground dials for the round 2 treatments. */
+  tweak?: BotAvatarTweak;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const cfg = useRef<Config>({ state, playKey, intensity, speed, paused, followPointer, loop, seed, dir });
@@ -209,7 +218,7 @@ export function MotionAvatar({
   const clipId = `bot-clip-${uid}`;
 
   const { style, face } = variantToStyle(variant);
-  const parts = useMemo(() => botAvatarParts(avatar, style, face), [avatar, style, face]);
+  const parts = useMemo(() => botAvatarParts(avatar, style, face, tweak), [avatar, style, face, tweak]);
 
   useEffect(() => {
     cfg.current = { state, playKey, intensity, speed, paused, followPointer, loop, seed, dir };
@@ -225,11 +234,15 @@ export function MotionAvatar({
     const body = q<SVGPathElement>("body")!;
     const eyeEls = [q<SVGGElement>("eye-l")!, q<SVGGElement>("eye-r")!];
     const bb = body.getBBox();
+    // Ornaments (halo, antenna) raise the top, so the extras (!, dots, z's) float above them.
+    const orn = q<SVGGElement>("ornaments");
+    const ornTop = orn && orn.childElementCount ? orn.getBBox().y : bb.y;
     const [cx, cy] = parts.center;
     const geo: Geometry = {
+      sphere: Math.min(SPHERE, Math.max(11, (bb.width / 2) * 0.88)),
       cx,
       cy,
-      top: bb.y,
+      top: Math.min(bb.y, ornTop),
       bottom: bb.y + bb.height,
       left: bb.x,
       right: bb.x + bb.width,
@@ -314,7 +327,7 @@ export function MotionAvatar({
     const rt = rtRef.current;
 
     const draw = (p: Pose, yawRaw: number, t: number) => {
-      const { cx: fx, cy: fy, top, bottom, left, right } = geo;
+      const { cx: fx, cy: fy, top, bottom, left, right, sphere: R } = geo;
       const yaw = wrapAngle(yawRaw);
       const sinY = Math.sin(yaw);
       const cosY = Math.cos(yaw);
@@ -329,24 +342,28 @@ export function MotionAvatar({
 
       // Side of the head: a dark crescent on the side the face turns away from.
       el.shade.setAttribute("opacity", `${n(0.36 * Math.abs(sinY))}`);
-      el.lit.setAttribute("transform", `translate(${n(sinY * 9)} 0)`);
+      el.lit.setAttribute("transform", `translate(${n(sinY * 9 * (R / SPHERE))} 0)`);
       el.back.setAttribute("opacity", `${n(0.32 * Math.max(0, -cosY))}`);
 
       // Eyes on the head sphere: longitude = eye offset, the turn rotates the sphere.
       geo.eyes.forEach((e, i) => {
-        const lam = Math.asin(clamp((e.x - fx) / SPHERE, -0.97, 0.97));
+        const lam = Math.asin(clamp((e.x - fx) / R, -0.97, 0.97));
         const phi = lam + yaw;
         const depth = Math.cos(phi);
-        const px = fx + SPHERE * Math.sin(phi);
+        const px = fx + R * Math.sin(phi);
         const wf = Math.max(0, depth) / Math.cos(lam);
         const open = clamp(i === 0 ? p.openL : p.openR, 0, 1);
         const sy = parts.closedScale + (1 - parts.closedScale) * open;
         const k = p.eye;
         const ox = p.gx * 2.8 * Math.max(0.3, depth);
         const oy = p.gy * 2.4;
+        const g = parts.grid;
         el.eyes[i].setAttribute(
           "transform",
-          `translate(${n(px + ox)} ${n(e.y + oy)}) scale(${n(Math.max(0.001, wf * k))} ${n(sy * k)}) translate(${n(-e.x)} ${n(-e.y)})`,
+          g
+            ? // Cell grid: the eyes jump from cell to cell, like a display, and never squeeze sideways.
+              `translate(${n(e.x + snap(px + ox - e.x, g))} ${n(e.y + snap(oy, g))}) scale(1 ${n(sy)}) translate(${n(-e.x)} ${n(-e.y)})`
+            : `translate(${n(px + ox)} ${n(e.y + oy)}) scale(${n(Math.max(0.001, wf * k))} ${n(sy * k)}) translate(${n(-e.x)} ${n(-e.y)})`,
         );
         el.eyes[i].setAttribute("opacity", `${n(clamp(depth * 8, 0, 1))}`);
       });
@@ -673,11 +690,14 @@ export function MotionAvatar({
       </g>
       <g data-p="rig">
         <g data-p="tilt">
-          <path data-p="body" d={parts.body} fill={parts.color} />
+          <path data-p="body" d={parts.body} fill={parts.fill} />
           <g clipPath={`url(#${clipId})`}>
             <path data-p="shade" d={parts.body} fill={dark} opacity={0} />
-            <path data-p="lit" d={parts.body} fill={parts.color} />
+            <path data-p="lit" d={parts.body} fill={parts.fill} />
             <path data-p="back" d={parts.body} fill={dark} opacity={0} />
+            {parts.details.map((l, i) => (
+              <AvatarLayer key={i} layer={l} />
+            ))}
             {parts.visor && <path data-p="visor" d={parts.visor} fill={dark} />}
             <g data-p="eye-l" fill={parts.eyeColor}>
               <path d={parts.eyes[0]} />
@@ -685,6 +705,20 @@ export function MotionAvatar({
             <g data-p="eye-r" fill={parts.eyeColor}>
               <path d={parts.eyes[1]} />
             </g>
+          </g>
+          {parts.stroke && (
+            <path
+              d={parts.body}
+              fill="none"
+              stroke={parts.stroke.color}
+              strokeWidth={parts.stroke.width}
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+          <g data-p="ornaments">
+            {parts.ornaments.map((l, i) => (
+              <AvatarLayer key={i} layer={l} />
+            ))}
           </g>
         </g>
       </g>

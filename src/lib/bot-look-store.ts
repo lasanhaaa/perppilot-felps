@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import type { BotAvatarVariant } from "@/components/ui/bot-avatar";
+import { BOT_AVATAR_VARIANTS, type BotAvatarVariant } from "@/components/ui/bot-avatar";
 import {
   BOT_AVATAR_COLORS,
   BOT_AVATAR_PARTS,
@@ -56,7 +56,7 @@ function readFace(): BotAvatarVariant {
   } catch {
     v = null;
   }
-  face = v === "visor" || v === "soft" ? v : "tech";
+  face = (BOT_AVATAR_VARIANTS as readonly string[]).includes(v ?? "") ? (v as BotAvatarVariant) : "tech";
   return face;
 }
 
@@ -115,7 +115,7 @@ export function resetBotLook(id: string) {
   emit();
 }
 
-/** Face style chosen in the prototype panel (Tech, Tech visor, Soft). */
+/** Face style chosen in the prototype panel (v1 Tech, Tech visor, Soft, or a round 2 style). */
 export function useBotFace(): BotAvatarVariant {
   return useSyncExternalStore(subscribe, readFace, () => "tech");
 }

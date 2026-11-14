@@ -12,8 +12,23 @@
  * avatar, shape, eyes and color are a pure function of that seed. See docs/bot-avatars.md.
  */
 
-export type BotAvatarStyle = "soft" | "tech";
+import {
+  GEO_EYES,
+  GEO_SHAPE_LIST,
+  GEO_STYLES,
+  GEO_TWEAK,
+  MATRIX_EYES,
+  geoParts,
+  type GeoLayer,
+  type GeoStyle,
+  type GeoTweak,
+} from "./bot-avatar-geo";
+
+/** v1 faces ("soft", "tech", kept as the backup) and the round 2 treatments (see bot-avatar-geo). */
+export type BotAvatarStyle = "soft" | "tech" | GeoStyle;
 export type BotAvatarFace = "cutout" | "visor";
+export type { GeoLayer as BotAvatarLayer, GeoTweak as BotAvatarTweak };
+export { GEO_TWEAK as BOT_AVATAR_TWEAK };
 
 /** Dark cut-out used for the eyes and the visor. */
 export const BOT_AVATAR_DARK = "#0D1012";
@@ -145,6 +160,10 @@ const TECH_EYES: BotAvatarEyes[] = [
 export const BOT_AVATAR_PARTS: Record<BotAvatarStyle, { shapes: BotAvatarShape[]; eyes: BotAvatarEyes[] }> = {
   soft: { shapes: SOFT_SHAPES, eyes: SOFT_EYES },
   tech: { shapes: TECH_SHAPES, eyes: TECH_EYES },
+  shard: { shapes: GEO_SHAPE_LIST, eyes: GEO_EYES },
+  sigil: { shapes: GEO_SHAPE_LIST, eyes: GEO_EYES },
+  matrix: { shapes: GEO_SHAPE_LIST, eyes: MATRIX_EYES },
+  halo: { shapes: GEO_SHAPE_LIST, eyes: GEO_EYES },
 };
 
 /** Looks per style: shapes × eyes × colors. */
@@ -178,14 +197,46 @@ export function botAvatarFromSeed(seed: number): BotAvatar {
 }
 
 /** Eye scale per style and face: tech cut-outs are 15% larger, visor eyes sit smaller inside the visor. */
-const EYE_SCALE = { soft: 1, tech: 1.15, visor: 0.78 } as const;
+const EYE_SCALE: Record<"soft" | "tech" | "visor", number> = { soft: 1, tech: 1.15, visor: 0.78 };
+
+const isGeo = (style: BotAvatarStyle): style is GeoStyle => (GEO_STYLES as readonly string[]).includes(style);
+
+/** Vertical scale that turns eyes of height `h` into a thin closed line (≈2.6 units tall). */
+const closedFor = (h: number) => f(Math.min(1, Math.max(0.15, 2.6 / h)));
 
 /** Paths ready to draw in a `0 0 56 56` viewBox. */
-export function botAvatarParts(avatar: BotAvatar, style: BotAvatarStyle = "tech", face: BotAvatarFace = "cutout") {
+export function botAvatarParts(
+  avatar: BotAvatar,
+  style: BotAvatarStyle = "tech",
+  face: BotAvatarFace = "cutout",
+  tweak: GeoTweak = GEO_TWEAK,
+) {
+  const color = BOT_AVATAR_COLORS[avatar.color % BOT_AVATAR_COLORS.length];
+  if (isGeo(style)) {
+    const g = geoParts(style, avatar, color.hex, BOT_AVATAR_DARK, tweak);
+    return {
+      body: g.body,
+      center: g.center,
+      color: color.hex,
+      /** Body fill: the bot color, or a dark tint of it for outlined heads. */
+      fill: g.fill,
+      /** Outline in screen px, for the outlined treatment. */
+      stroke: g.stroke,
+      /** Drawn inside the body, over the fill: facets, construction lines, marks. */
+      details: g.details,
+      /** Drawn around the head and moving with it: halos, antennas, horns. */
+      ornaments: g.ornaments,
+      visor: null as string | null,
+      eyeColor: g.eyeColor,
+      eyes: g.eyes,
+      grid: g.grid,
+      closedScale: closedFor(g.eyeH),
+      label: `${g.shapeName}, ${g.eyeName}, ${color.name}`,
+    };
+  }
   const { shapes, eyes } = BOT_AVATAR_PARTS[style];
   const shape = shapes[avatar.shape % shapes.length];
   const eyeDef = eyes[avatar.eyes % eyes.length];
-  const color = BOT_AVATAR_COLORS[avatar.color % BOT_AVATAR_COLORS.length];
   const visor = style === "tech" && face === "visor";
   const k = visor ? EYE_SCALE.visor : EYE_SCALE[style];
   const [cx, cy] = shape.eye;
@@ -195,14 +246,20 @@ export function botAvatarParts(avatar: BotAvatar, style: BotAvatarStyle = "tech"
     /** Point the eyes are centered on: the face center, used for head turns. */
     center: shape.eye,
     color: color.hex,
+    fill: color.hex,
+    stroke: null as { color: string; width: number } | null,
+    details: [] as GeoLayer[],
+    ornaments: [] as GeoLayer[],
     visor: visor ? box(cx, cy, 32, 18, 1) : null,
     eyeColor: visor ? color.hex : BOT_AVATAR_DARK,
     eyes: [left, right] as const,
-    /** Vertical scale that turns these eyes into a thin closed line (≈2.6 units tall). */
-    closedScale: f(Math.min(1, Math.max(0.15, 2.6 / (eyeDef.h * k)))),
+    grid: null as number | null,
+    closedScale: closedFor(eyeDef.h * k),
     label: `${shape.name}, ${eyeDef.name}, ${color.name}`,
   };
 }
+
+export type BotAvatarParts = ReturnType<typeof botAvatarParts>;
 
 /** Deterministic list of demo seeds. */
 export function botSeedSequence(start: number, count: number): number[] {

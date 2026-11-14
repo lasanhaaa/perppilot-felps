@@ -93,11 +93,14 @@ export function ProtoSegment<T extends string>({
   value,
   onChange,
   options,
+  columns = options.length,
 }: {
   label: string;
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string }[];
+  /** Options per row; extra options wrap to a second row. */
+  columns?: number;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -106,7 +109,7 @@ export function ProtoSegment<T extends string>({
         role="radiogroup"
         aria-label={label}
         className="grid gap-1 rounded-[4px] bg-fill-2 p-1"
-        style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       >
         {options.map((o) => (
           <button
@@ -128,11 +131,21 @@ export function ProtoSegment<T extends string>({
   );
 }
 
-const VARIANTS: { value: BotAvatarVariant; label: string }[] = [
-  { value: "tech", label: "Tech" },
-  { value: "visor", label: "Tech visor" },
-  { value: "soft", label: "Soft" },
+/** v1 faces (the backup) first, then the round 2 styles from /bot-styles. */
+export const FACE_OPTIONS: { value: BotAvatarVariant; label: string }[] = [
+  { value: "tech", label: "V1 Tech" },
+  { value: "visor", label: "V1 Visor" },
+  { value: "soft", label: "V1 Soft" },
+  { value: "shard", label: "Shard" },
+  { value: "sigil", label: "Sigil" },
+  { value: "matrix", label: "Matrix" },
+  { value: "halo", label: "Halo" },
 ];
+
+/** Face style switch, shared by the Bots overview and Bot Detail panels. */
+export function FaceSegment({ value, onChange }: { value: BotAvatarVariant; onChange: (v: BotAvatarVariant) => void }) {
+  return <ProtoSegment label="Face" value={value} onChange={onChange} options={FACE_OPTIONS} columns={4} />;
+}
 
 /** Bots grid controls: face style, fills on or off, and the rare events. */
 export function MotionPanel({
@@ -166,7 +179,7 @@ export function MotionPanel({
 }) {
   return (
     <PrototypeDock title="Motion prototype" event={lastEvent} reducedMotion={reducedMotion}>
-      <ProtoSegment label="Face" value={variant} onChange={onVariant} options={VARIANTS} />
+      <FaceSegment value={variant} onChange={onVariant} />
       <label className="flex cursor-pointer items-center justify-between gap-3">
         <span className="text-white/80">Simulate order fills</span>
         <button

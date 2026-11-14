@@ -4,19 +4,41 @@ import {
   botAvatarParts,
   type BotAvatar as BotAvatarLook,
   type BotAvatarFace,
+  type BotAvatarLayer,
   type BotAvatarStyle,
+  type BotAvatarTweak,
 } from "@/lib/bot-avatar";
 import { cn } from "@/lib/cn";
 
-/** How the face is drawn: the tech geometry with cut-out eyes or a visor, or the soft geometry. */
-export type BotAvatarVariant = "tech" | "visor" | "soft";
+/**
+ * How the face is drawn. v1 (the backup): the tech geometry with cut-out eyes or a visor, or the
+ * soft geometry. Round 2: shard, sigil, matrix and halo (see src/lib/bot-avatar-geo.ts).
+ */
+export type BotAvatarVariant = "tech" | "visor" | "soft" | "shard" | "sigil" | "matrix" | "halo";
+
+export const BOT_AVATAR_VARIANTS: readonly BotAvatarVariant[] = ["tech", "visor", "soft", "shard", "sigil", "matrix", "halo"];
 
 export function variantToStyle(variant: BotAvatarVariant): {
   style: BotAvatarStyle;
   face: BotAvatarFace;
 } {
-  if (variant === "soft") return { style: "soft", face: "cutout" };
-  return { style: "tech", face: variant === "visor" ? "visor" : "cutout" };
+  if (variant === "tech" || variant === "visor") return { style: "tech", face: variant === "visor" ? "visor" : "cutout" };
+  return { style: variant, face: "cutout" };
+}
+
+/** One extra layer of a face (facet, line, ornament). */
+export function AvatarLayer({ layer }: { layer: BotAvatarLayer }) {
+  return (
+    <path
+      d={layer.d}
+      fill={layer.fill ?? "none"}
+      stroke={layer.stroke}
+      strokeWidth={layer.width}
+      strokeLinecap="square"
+      vectorEffect={layer.screen ? "non-scaling-stroke" : undefined}
+      opacity={layer.opacity}
+    />
+  );
 }
 
 /**
@@ -40,6 +62,7 @@ export function BotAvatar({
   dimmed = false,
   className,
   label,
+  tweak,
 }: {
   seed?: number;
   avatar?: BotAvatarLook;
@@ -52,10 +75,12 @@ export function BotAvatar({
   className?: string;
   /** Accessible name. Omit when the pair and bot type sit next to it. */
   label?: string;
+  /** Playground dials for the round 2 treatments. */
+  tweak?: BotAvatarTweak;
 }) {
   const look = avatar ?? botAvatarFromSeed(seed ?? 0);
   const { style, face } = variantToStyle(variant);
-  const p = botAvatarParts(look, style, face);
+  const p = botAvatarParts(look, style, face, tweak);
   const eyeClass = cn(
     "bot-eye",
     blink > 0 && pose === "open" && "bot-eye-blink",
@@ -77,7 +102,16 @@ export function BotAvatar({
       )}
       style={{ "--closed": p.closedScale } as CSSProperties}
     >
-      <path d={p.body} fill={p.color} />
+      <path d={p.body} fill={p.fill} />
+      {p.details.map((l, i) => (
+        <AvatarLayer key={i} layer={l} />
+      ))}
+      {p.stroke && (
+        <path d={p.body} fill="none" stroke={p.stroke.color} strokeWidth={p.stroke.width} strokeLinejoin="miter" vectorEffect="non-scaling-stroke" />
+      )}
+      {p.ornaments.map((l, i) => (
+        <AvatarLayer key={i} layer={l} />
+      ))}
       {p.visor && <path d={p.visor} fill="#0D1012" />}
       <g className="bot-avatar-look">
         <g className={cn(scanning && pose === "open" && "bot-avatar-scan")}>
