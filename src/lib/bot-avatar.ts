@@ -24,13 +24,15 @@ import {
   type GeoTweak,
 } from "./bot-avatar-geo";
 import { CHARACTER_FACES } from "./bot-avatar-character";
+import { GLYPH_EYES, GLYPH_SHAPES } from "./bot-avatar-glyph";
 
 /**
  * "character": the V1 Tech heads, flat, with personality (bot-avatar-character). "techflat": V1
- * Tech with only the rounding and the shadows removed. v1 faces ("soft", "tech", kept as the
+ * Tech with only the rounding and the shadows removed. "glyph": new heads with notches, ears,
+ * legs and bites, and small eyes (bot-avatar-glyph, exploration). v1 faces ("soft", "tech", kept as the
  * backup) and the round 2 treatments (see bot-avatar-geo).
  */
-export type BotAvatarStyle = "character" | "techflat" | "soft" | "tech" | GeoStyle;
+export type BotAvatarStyle = "glyph" | "character" | "techflat" | "soft" | "tech" | GeoStyle;
 export type BotAvatarFace = "cutout" | "visor";
 export type { GeoLayer as BotAvatarLayer, GeoTweak as BotAvatarTweak };
 export { GEO_TWEAK as BOT_AVATAR_TWEAK };
@@ -183,6 +185,7 @@ const TECH_EYES = techEyes(0.5);
 const TECH_FLAT_EYES = techEyes(0);
 
 export const BOT_AVATAR_PARTS: Record<BotAvatarStyle, { shapes: BotAvatarShape[]; eyes: BotAvatarEyes[] }> = {
+  glyph: { shapes: GLYPH_SHAPES, eyes: GLYPH_EYES },
   character: { shapes: CHARACTER_SHAPES, eyes: CHARACTER_FACES },
   techflat: { shapes: CHARACTER_SHAPES, eyes: TECH_FLAT_EYES },
   soft: { shapes: SOFT_SHAPES, eyes: SOFT_EYES },
@@ -271,6 +274,7 @@ export function botAvatarParts(
   }
   const { shapes, eyes } = BOT_AVATAR_PARTS[style];
   const character = style === "character";
+  const glyph = style === "glyph";
   /** Character and V1 Tech flat: sharp V1 Tech heads, no shadows. */
   const sharp = character || style === "techflat";
   const shapeList = sharp && tweak.corner !== GEO_TWEAK.corner ? characterShapes(tweak.corner) : shapes;
@@ -279,8 +283,10 @@ export function botAvatarParts(
   const visor = style === "tech" && face === "visor";
   const k = visor
     ? EYE_SCALE.visor
-    : character
-      ? EYE_SCALE.character * tweak.eye
+    : glyph
+      ? tweak.eye
+      : character
+        ? EYE_SCALE.character * tweak.eye
       : style === "techflat"
         ? EYE_SCALE.tech
         : EYE_SCALE[style];
@@ -302,7 +308,7 @@ export function botAvatarParts(
     mouth: eyeDef.mouth?.(cx, cy, k) ?? null,
     grid: null as number | null,
     /** Character and V1 Tech flat: no floor shadow, no dark side on turns. */
-    flat: sharp,
+    flat: sharp || glyph,
     closedScale: closedFor(eyeDef.h * k),
     label: `${shape.name}, ${eyeDef.name}, ${color.name}`,
   };

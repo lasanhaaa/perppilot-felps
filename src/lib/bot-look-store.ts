@@ -25,7 +25,8 @@ const listeners = new Set<() => void>();
 let looks: Looks | null = null;
 let face: BotAvatarVariant | null = null;
 
-const SHAPES = BOT_AVATAR_PARTS.tech.shapes.length;
+/** Styles can have more heads than V1 (the glyph exploration), so accept the largest set. */
+const SHAPES = Math.max(...Object.values(BOT_AVATAR_PARTS).map((p) => p.shapes.length));
 const EYES = BOT_AVATAR_PARTS.tech.eyes.length;
 const COLORS = BOT_AVATAR_COLORS.length;
 const index = (v: unknown, n: number) =>

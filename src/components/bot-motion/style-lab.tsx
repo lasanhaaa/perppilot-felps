@@ -21,6 +21,7 @@ import { useReducedMotion } from "@/lib/use-reduced-motion";
 type StyleInfo = { id: BotAvatarVariant; name: string; note: string };
 
 const STYLES: StyleInfo[] = [
+  { id: "glyph", name: "Glyph", note: "New heads, small eyes" },
   { id: "character", name: "Character", note: "V1 Tech + personality" },
   { id: "techflat", name: "V1 Tech flat", note: "No rounding, no shadow" },
   { id: "tech", name: "V1 Tech", note: "Backup" },
@@ -32,10 +33,11 @@ const STYLES: StyleInfo[] = [
   { id: "halo", name: "Halo", note: "Round 2: ornament" },
 ];
 const STYLE_IDS = STYLES.map((s) => s.id);
+const MAX_SHAPES = Math.max(...Object.values(BOT_AVATAR_PARTS).map((p) => p.shapes.length));
 
 type Dial = { key: keyof BotAvatarTweak; label: string; min: number; max: number; step: number; unit: string; for: BotAvatarVariant[] };
 const DIALS: Dial[] = [
-  { key: "eye", label: "Face size", min: 0.7, max: 1.4, step: 0.05, unit: "×", for: ["character", "shard", "sigil", "halo"] },
+  { key: "eye", label: "Face size", min: 0.7, max: 1.4, step: 0.05, unit: "×", for: ["glyph", "character", "shard", "sigil", "halo"] },
   { key: "corner", label: "Corners", min: 0, max: 3, step: 0.25, unit: "", for: ["character", "techflat"] },
   { key: "line", label: "Line weight", min: 0.75, max: 3, step: 0.25, unit: "px", for: ["sigil"] },
   { key: "detail", label: "Detail", min: 0, max: 1.6, step: 0.05, unit: "×", for: ["shard", "sigil", "halo"] },
@@ -78,7 +80,7 @@ export function StyleLab() {
   const [playAnyway, setPlayAnyway] = useState(false);
   const paused = reduced && !playAnyway;
   const seeds = useMemo(() => uniqueBotSeeds(20261114, 8), []);
-  const [variant, setVariant] = useState<BotAvatarVariant>("character");
+  const [variant, setVariant] = useState<BotAvatarVariant>("glyph");
   const [look, setLook] = useState<Look>(() => botAvatarFromSeed(seeds[0]));
   const [tweak, setTweak] = useState<BotAvatarTweak>(BOT_AVATAR_TWEAK);
   const [state, setState] = useState<MotionStateId>("idle");
@@ -96,7 +98,7 @@ export function StyleLab() {
     const int = (k: string, n: number, d: number) => Math.min(n - 1, Math.max(0, Math.round(num(k, d))));
     /* eslint-disable react-hooks/set-state-in-effect -- one-time read of the shared link */
     if (v && STYLE_IDS.includes(v)) setVariant(v);
-    setLook((l) => ({ shape: int("shape", 12, l.shape), eyes: int("eyes", 8, l.eyes), color: int("color", 8, l.color) }));
+    setLook((l) => ({ shape: int("shape", MAX_SHAPES, l.shape), eyes: int("eyes", 8, l.eyes), color: int("color", 8, l.color) }));
     setTweak((t) => ({
       eye: num("eye", t.eye),
       line: num("line", t.line),
@@ -136,7 +138,7 @@ export function StyleLab() {
   };
   const randomize = () => {
     setLook({
-      shape: Math.floor(Math.random() * 12),
+      shape: Math.floor(Math.random() * shapes.length),
       eyes: Math.floor(Math.random() * 8),
       color: Math.floor(Math.random() * BOT_AVATAR_COLORS.length),
     });
@@ -158,9 +160,9 @@ export function StyleLab() {
           </div>
           <h1 className="text-[24px] leading-[1.5] font-medium">Bot styles</h1>
           <p className="max-w-[760px] text-[16px] leading-[1.5] text-white/60">
-            Character is the current direction: the V1 Tech heads, flat, with a personality per face, built from dark
-            cut-outs only. V1 and round 2 stay below for comparison. Every style keeps the same rig, so all the motion
-            works on it.
+            Glyph explores new heads (notches, ears, legs, bites) with small eyes set close together. Character and V1
+            Tech flat keep the V1 Tech heads. V1 and round 2 stay for comparison. Every style keeps the same rig, so all
+            the motion works on it.
           </p>
           {paused && (
             <p className="text-[14px] text-white/60">
@@ -465,7 +467,7 @@ export function StyleLab() {
           <h2 id="all-shapes" className="text-[18px] font-medium">
             {info.name}: every shape
           </h2>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 xl:grid-cols-12">
+          <div className={cn("grid grid-cols-3 gap-2 sm:grid-cols-6", shapes.length > 12 ? "xl:grid-cols-9" : "xl:grid-cols-12")}>
             {shapes.map((s, i) => (
               <button
                 key={s.name}

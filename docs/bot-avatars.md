@@ -18,7 +18,23 @@ The first version (7×7 pixel robots) was rejected by the client as too gamified
 - Layers: Body, Eye L, Eye R. Only the eyes ever move.
 - Sizes: 28 (lists), 54 / 56 (cards), 84+ (detail, editor preview).
 
-## Character (current direction, 2026-11-14)
+## Glyph heads and small eyes (exploration, 2026-11-14)
+
+felipe: some heads are too basic (square, hexagon, diamond), some do not work (the slim round 2
+set), and the eyes are too big; reference: an agent mascot drawn as one flat silhouette with
+notches, ears, legs and bites, and two small square eyes set close together.
+
+- Code: `src/lib/bot-avatar-glyph.ts`, style `glyph`, the default on `/bot-styles` for now.
+- One grammar for every head, so they read as a family: a core block, a corner treatment per
+  corner (square, cut, inner notch, concave scoop) and features per edge (V notch or point, slot
+  or tab, trapezoid tab, concave bite, convex bump). Corners stay sharp; bites and bumps are the
+  only curves.
+- 18 candidate heads to pick 12 from: Moth, Beetle, Owl, Crown, Spark, Gear, Walker, Plug,
+  Helmet, Ticket, Hourglass, Totem, Mantis, Badge, Lantern, Comet, Rune, Bolt.
+- 8 small eye sets (about a tenth of the head width, one eye apart): Dots, Tiny, Wide, Slits,
+  Bars, Lids, Glance, Mono. Flat, no shadows, same motion rig.
+
+## Character (2026-11-14)
 
 felipe's call after round 2: keep the V1 Tech silhouettes (the slimmer "Tech 2" redraw and its
 engraved details were rejected), keep them flat (no floor shadow, no dark side on turns), and give
