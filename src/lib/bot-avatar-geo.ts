@@ -13,12 +13,13 @@
  * Body and the two eyes stay separate paths, so every motion state works on every treatment.
  */
 
-export type GeoStyle = "tech2" | "shard" | "sigil" | "matrix" | "halo";
-export const GEO_STYLES: readonly GeoStyle[] = ["tech2", "shard", "sigil", "matrix", "halo"];
+export type GeoStyle = "shard" | "sigil" | "matrix" | "halo";
+export const GEO_STYLES: readonly GeoStyle[] = ["shard", "sigil", "matrix", "halo"];
 
 /** Playground dials. `line` is in screen px (outlines keep their weight at every size). */
-export type GeoTweak = { eye: number; line: number; detail: number; gap: number };
-export const GEO_TWEAK: GeoTweak = { eye: 1, line: 1.5, detail: 1, gap: 1.4 };
+/** Playground dials. `corner` rounds the character heads (0 = sharp, the V1 Tech rounding is 1.5). */
+export type GeoTweak = { eye: number; line: number; detail: number; gap: number; corner: number };
+export const GEO_TWEAK: GeoTweak = { eye: 1, line: 1.5, detail: 1, gap: 1.4, corner: 0 };
 
 type Pt = [number, number];
 const f = (v: number) => +v.toFixed(2);
@@ -299,103 +300,6 @@ function ornament(shape: GeoShape, color: string, strength: number): GeoLayer[] 
   }
 }
 
-// ── Tech 2: V1 Tech, sharp and slim ───────────────────────────────────────────
-
-/** Fine engravings, dark on the body: a seam, a horizon, a glyph, ticks, a frame, a chin dash. */
-type Mark = "seam" | "horizon" | "glyph" | "ticks" | "frame" | "chin";
-type Tech2Shape = { name: string; pts: Pt[]; eye: Pt; marks: Mark[] };
-
-/**
- * The 12 V1 Tech shapes redrawn: straight corners (no rounding), 45° chamfers, bodies about 36–40
- * wide instead of 50, so there is air around the head.
- */
-export const TECH2_SHAPES: Tech2Shape[] = [
-  { name: "Octagon", pts: [[17, 4], [39, 4], [47, 12], [47, 45], [39, 53], [17, 53], [9, 45], [9, 12]], eye: [28, 28], marks: ["seam"] },
-  { name: "Block", pts: [[10, 5], [46, 5], [46, 53], [10, 53]], eye: [28, 27], marks: ["frame"] },
-  { name: "Hexagon", pts: [[17, 5], [39, 5], [48, 29], [39, 53], [17, 53], [8, 29]], eye: [28, 29], marks: ["horizon"] },
-  { name: "Shield", pts: [[10, 4], [46, 4], [46, 34], [28, 53], [10, 34]], eye: [28, 20], marks: ["glyph"] },
-  { name: "Diamond", pts: [[28, 2], [48, 28], [28, 54], [8, 28]], eye: [28, 28], marks: ["horizon"] },
-  { name: "Cut", pts: [[10, 5], [36, 5], [46, 15], [46, 53], [10, 53]], eye: [28, 30], marks: ["ticks"] },
-  { name: "Twin cut", pts: [[22, 5], [46, 5], [46, 41], [34, 53], [10, 53], [10, 17]], eye: [28, 29], marks: ["seam", "chin"] },
-  {
-    name: "Chip",
-    pts: [[10, 5], [46, 5], [46, 21], [42, 21], [42, 35], [46, 35], [46, 53], [10, 53], [10, 35], [14, 35], [14, 21], [10, 21]],
-    eye: [28, 28],
-    marks: ["seam"],
-  },
-  { name: "Trapezoid", pts: [[18, 5], [38, 5], [47, 53], [9, 53]], eye: [28, 31], marks: ["glyph"] },
-  { name: "Slab", pts: [[12, 12], [44, 12], [50, 18], [50, 38], [44, 44], [12, 44], [6, 38], [6, 18]], eye: [28, 28], marks: ["ticks"] },
-  { name: "Step", pts: [[22, 5], [46, 5], [46, 53], [10, 53], [10, 17], [22, 17]], eye: [28, 33], marks: ["chin"] },
-  {
-    name: "Cross",
-    pts: [[21, 3], [35, 3], [35, 17], [49, 17], [49, 37], [35, 37], [35, 53], [21, 53], [21, 37], [7, 37], [7, 17], [21, 17]],
-    eye: [28, 27],
-    marks: ["glyph"],
-  },
-];
-
-const sharpBracket = (cx: number, y: number, side: 1 | -1, k: number) => {
-  const w = 4.6 * k;
-  const h = 11 * k;
-  const t = 1.8 * k;
-  const x0 = cx - (side * w) / 2;
-  return `M${f(x0)} ${f(y - h / 2)}h${f(side * w)}v${f(t)}h${f(-side * (w - t))}v${f(h - 2 * t)}h${f(side * (w - t))}v${f(t)}h${f(-side * w)}z`;
-};
-
-/** Smaller and sharp (no radius). Lenses and Oracle add the stranger side. */
-export const TECH2_EYES: GeoEyes[] = [
-  { name: "Bars", h: 11, draw: (x, y, k) => [rect(x - 5.5 * k, y, 3.6 * k, 11 * k), rect(x + 5.5 * k, y, 3.6 * k, 11 * k)] },
-  { name: "Pixels", h: 5, draw: (x, y, k) => [rect(x - 6 * k, y, 5 * k, 5 * k), rect(x + 6 * k, y, 5 * k, 5 * k)] },
-  { name: "Look", h: 11, draw: (x, y, k) => [rect(x - 1.5 * k, y - k, 3.6 * k, 11 * k), rect(x + 8.5 * k, y - k, 3.6 * k, 11 * k)] },
-  { name: "Slits", h: 2.4, draw: (x, y, k) => [rect(x - 6.5 * k, y, 8 * k, 2.4 * k), rect(x + 6.5 * k, y, 8 * k, 2.4 * k)] },
-  { name: "Wink", h: 11, draw: (x, y, k) => [rect(x - 5.5 * k, y, 3.6 * k, 11 * k), rect(x + 6.5 * k, y + 4.3 * k, 8 * k, 2.4 * k)] },
-  { name: "Lenses", h: 8, draw: (x, y, k) => [rhomb(x - 6 * k, y, 5.4 * k, 8 * k), rhomb(x + 6 * k, y, 5.4 * k, 8 * k)] },
-  { name: "Brackets", h: 11, draw: (x, y, k) => [sharpBracket(x - 6 * k, y, 1, k), sharpBracket(x + 6 * k, y, -1, k)] },
-  {
-    name: "Oracle",
-    h: 6.4,
-    draw: (x, y, k) => [
-      `M${f(x)} ${f(y - 3.2 * k)}L${f(x - 6 * k)} ${f(y)}L${f(x)} ${f(y + 3.2 * k)}Z`,
-      `M${f(x)} ${f(y - 3.2 * k)}L${f(x + 6 * k)} ${f(y)}L${f(x)} ${f(y + 3.2 * k)}Z`,
-    ],
-  },
-];
-
-function tech2Marks(shape: Tech2Shape, eyeH: number, dark: string, strength: number): GeoLayer[] {
-  const { pts, eye } = shape;
-  const ys = pts.map((p) => p[1]);
-  const top = span(pts, "x", eye[0])?.[0] ?? Math.min(...ys);
-  const bottom = span(pts, "x", eye[0])?.[1] ?? Math.max(...ys);
-  const line = (d: string): GeoLayer => ({ d, stroke: dark, width: 1, opacity: f(Math.min(1, 0.5 * strength)) });
-  const solid = (d: string): GeoLayer => ({ d, fill: dark, opacity: f(Math.min(1, 0.85 * strength)) });
-  const above = eye[1] - eyeH / 2;
-  const below = eye[1] + eyeH / 2;
-  return shape.marks.flatMap((m): GeoLayer[] => {
-    switch (m) {
-      case "seam":
-        return above - top > 8 ? [line(seg([eye[0], top], [eye[0], above - 4]))] : [];
-      case "horizon": {
-        const s = span(pts, "y", eye[1]);
-        return s ? [line(seg([s[0], eye[1]], [s[1], eye[1]]))] : [];
-      }
-      case "glyph": {
-        // A small diamond on the forehead, or under the eyes when the forehead is short.
-        const y = above - top >= 13 ? top + (above - top) / 2 : below + (bottom - below) / 2;
-        return [solid(rhomb(eye[0], y, 3.6, 5.4))];
-      }
-      case "ticks": {
-        const ta = span(pts, "x", eye[0] - 7)?.[0] ?? top;
-        const tb = span(pts, "x", eye[0] + 7)?.[0] ?? top;
-        return [solid(rect(eye[0] - 7, ta + 2.5, 1.4, 5) + rect(eye[0] + 7, tb + 2.5, 1.4, 5))];
-      }
-      case "frame":
-        return [line(polyD(inset(pts, 3.4)))];
-      case "chin":
-        return [solid(rect(eye[0], below + Math.min(6, (bottom - below) / 2), 7, 1.4))];
-    }
-  });
-}
-
 export type GeoParts = {
   body: string;
   center: Pt;
@@ -422,26 +326,6 @@ export function geoParts(
   dark: string,
   tweak: GeoTweak = GEO_TWEAK,
 ): GeoParts {
-  if (style === "tech2") {
-    const shape = TECH2_SHAPES[look.shape % TECH2_SHAPES.length];
-    const eyeDef = TECH2_EYES[look.eyes % TECH2_EYES.length];
-    const k = tweak.eye;
-    return {
-      body: polyD(shape.pts),
-      center: shape.eye,
-      fill: color,
-      stroke: null,
-      details: tech2Marks(shape, eyeDef.h * k, dark, tweak.detail),
-      ornaments: [],
-      eyes: eyeDef.draw(shape.eye[0], shape.eye[1], k),
-      eyeColor: dark,
-      eyeH: eyeDef.h * k,
-      grid: null,
-      flat: true,
-      shapeName: shape.name,
-      eyeName: eyeDef.name,
-    };
-  }
   const shape = GEO_SHAPES[look.shape % GEO_SHAPES.length];
   if (style === "matrix") {
     const ei = look.eyes % MATRIX_EYES.length;
@@ -513,4 +397,3 @@ export function geoParts(
 
 /** Editor and gallery lists: name + a plain outline path for each silhouette. */
 export const GEO_SHAPE_LIST = GEO_SHAPES.map((s) => ({ name: s.name, d: polyD(s.pts), eye: s.eye }));
-export const TECH2_SHAPE_LIST = TECH2_SHAPES.map((s) => ({ name: s.name, d: polyD(s.pts), eye: s.eye }));

@@ -94,6 +94,8 @@ function EditorBody({ bot, onClose, onSaved }: { bot: Bot; onClose: () => void; 
 
   const { style } = variantToStyle(variant);
   const { shapes, eyes } = BOT_AVATAR_PARTS[style];
+  // Character faces are more than eyes (brows, lids, mouths).
+  const faceLabel = style === "character" ? "Face" : "Eyes";
 
   // One look per bot inside the account: the backend keeps (user, signature) unique.
   const taken = useMemo(
@@ -171,8 +173,8 @@ function EditorBody({ bot, onClose, onSaved }: { bot: Bot; onClose: () => void; 
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <Label count={eyes.length}>Eyes</Label>
-            <div role="radiogroup" aria-label="Eyes" className="grid grid-cols-4 gap-1">
+            <Label count={eyes.length}>{faceLabel}</Label>
+            <div role="radiogroup" aria-label={faceLabel} className="grid grid-cols-4 gap-1">
               {eyes.map((e, i) => (
                 <Tile key={e.name} label={e.name} selected={draft.eyes % eyes.length === i} onClick={() => setDraft({ ...draft, eyes: i })} className="h-[60px]">
                   <BotAvatar avatar={{ ...draft, eyes: i }} variant={variant} size={36} />

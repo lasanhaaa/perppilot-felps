@@ -131,6 +131,9 @@ type Geometry = {
   left: number;
   right: number;
   eyes: { x: number; y: number }[];
+  /** Character faces: brow and mouth centers. */
+  brows: { x: number; y: number }[];
+  mouth: { x: number; y: number } | null;
 };
 
 type Runtime = {
@@ -233,6 +236,12 @@ export function MotionAvatar({
 
     const body = q<SVGPathElement>("body")!;
     const eyeEls = [q<SVGGElement>("eye-l")!, q<SVGGElement>("eye-r")!];
+    const browEls = [q<SVGGElement>("brow-l"), q<SVGGElement>("brow-r")].filter((b): b is SVGGElement => !!b);
+    const mouthEl = q<SVGGElement>("mouth");
+    const centerOf = (g: SVGGElement) => {
+      const b = (g.firstElementChild as SVGPathElement).getBBox();
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    };
     const bb = body.getBBox();
     // Ornaments (halo, antenna) raise the top, so the extras (!, dots, z's) float above them.
     const orn = q<SVGGElement>("ornaments");
@@ -246,10 +255,9 @@ export function MotionAvatar({
       bottom: bb.y + bb.height,
       left: bb.x,
       right: bb.x + bb.width,
-      eyes: eyeEls.map((el) => {
-        const b = (el.firstElementChild as SVGPathElement).getBBox();
-        return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-      }),
+      eyes: eyeEls.map(centerOf),
+      brows: browEls.map(centerOf),
+      mouth: mouthEl ? centerOf(mouthEl) : null,
     };
     const el = {
       shadow: q<SVGEllipseElement>("shadow")!,
@@ -260,6 +268,8 @@ export function MotionAvatar({
       back: q<SVGPathElement>("back")!,
       visor: q<SVGPathElement>("visor"),
       eyes: eyeEls,
+      brows: browEls,
+      mouth: mouthEl,
       extras: qa<SVGGElement>("extras"),
       dots: qa<SVGRectElement>("dot"),
       zs: qa<SVGPathElement>("z"),
@@ -368,6 +378,45 @@ export function MotionAvatar({
         );
         el.eyes[i].setAttribute("opacity", `${n(clamp(depth * 8, 0, 1))}`);
       });
+
+      // Character faces: brows and mouth sit on the same sphere as the eyes. The brows carry the
+      // expression: up when the eyes widen, inner ends up on an alert or out of range, one brow
+      // up while thinking, pulled in while working, down when the eyes close.
+      const onSphere = (x: number) => {
+        const lam = Math.asin(clamp((x - fx) / R, -0.97, 0.97));
+        const phi = lam + yaw;
+        const depth = Math.cos(phi);
+        return { px: fx + R * Math.sin(phi), wf: Math.max(0.001, Math.max(0, depth) / Math.cos(lam)), depth };
+      };
+      const worry = clamp(p.alert + 0.7 * p.arrow, 0, 1);
+      const glance = p.gx * 2.8;
+      if (el.brows.length) {
+        const lift = -(p.eye - 1) * 9 - 2.2 * worry - 1.4 * clamp(p.checkA, 0, 1);
+        geo.brows.forEach((b, i) => {
+          const s = onSphere(b.x);
+          const open = clamp(i === 0 ? p.openL : p.openR, 0, 1);
+          const side = i === 0 ? -1 : 1;
+          const think = i === 1 ? -2.6 * p.dots : 0.5 * p.dots;
+          const dy = p.gy * 1.2 + lift + 1.6 * (1 - open) + think;
+          const ang = side * (13 * worry - 8 * p.send) + (i === 1 ? -7 * p.dots : 0);
+          el.brows[i].setAttribute(
+            "transform",
+            `translate(${n(s.px + glance * 0.3)} ${n(b.y + dy)}) rotate(${n(ang)}) scale(${n(s.wf)} 1) translate(${n(-b.x)} ${n(-b.y)})`,
+          );
+          el.brows[i].setAttribute("opacity", `${n(clamp(s.depth * 8, 0, 1))}`);
+        });
+      }
+      if (el.mouth && geo.mouth) {
+        const m = geo.mouth;
+        const s = onSphere(m.x);
+        const sx = 1 + 0.22 * clamp(p.checkA, 0, 1) - 0.18 * worry - 0.25 * p.dots;
+        const sy = 1 + 0.3 * worry;
+        el.mouth.setAttribute(
+          "transform",
+          `translate(${n(s.px + glance * 0.25)} ${n(m.y + p.gy * 0.7)}) scale(${n(s.wf * sx)} ${n(sy)}) translate(${n(-m.x)} ${n(-m.y)})`,
+        );
+        el.mouth.setAttribute("opacity", `${n(clamp(s.depth * 8, 0, 1))}`);
+      }
 
       if (el.visor) {
         const lv = Math.asin(16 / SPHERE);
@@ -706,6 +755,21 @@ export function MotionAvatar({
             <g data-p="eye-r" fill={parts.eyeColor}>
               <path d={parts.eyes[1]} />
             </g>
+            {parts.brows && (
+              <>
+                <g data-p="brow-l" fill={parts.eyeColor}>
+                  <path d={parts.brows[0]} />
+                </g>
+                <g data-p="brow-r" fill={parts.eyeColor}>
+                  <path d={parts.brows[1]} />
+                </g>
+              </>
+            )}
+            {parts.mouth && (
+              <g data-p="mouth" fill={parts.eyeColor}>
+                <path d={parts.mouth} />
+              </g>
+            )}
           </g>
           {parts.stroke && (
             <path

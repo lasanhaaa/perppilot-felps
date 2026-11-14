@@ -11,13 +11,14 @@ import {
 import { cn } from "@/lib/cn";
 
 /**
- * How the face is drawn. v1 (the backup): the tech geometry with cut-out eyes or a visor, or the
- * soft geometry. Round 2: tech2 (V1 Tech, sharp and slim), shard, sigil, matrix and halo
+ * How the face is drawn. "character" (current direction): the V1 Tech heads, flat, with a
+ * personality per face (src/lib/bot-avatar-character.ts). v1 (the backup): the tech geometry with
+ * cut-out eyes or a visor, or the soft geometry. Round 2: shard, sigil, matrix and halo
  * (see src/lib/bot-avatar-geo.ts).
  */
-export type BotAvatarVariant = "tech" | "visor" | "soft" | "tech2" | "shard" | "sigil" | "matrix" | "halo";
+export type BotAvatarVariant = "character" | "tech" | "visor" | "soft" | "shard" | "sigil" | "matrix" | "halo";
 
-export const BOT_AVATAR_VARIANTS: readonly BotAvatarVariant[] = ["tech", "visor", "soft", "tech2", "shard", "sigil", "matrix", "halo"];
+export const BOT_AVATAR_VARIANTS: readonly BotAvatarVariant[] = ["character", "tech", "visor", "soft", "shard", "sigil", "matrix", "halo"];
 
 export function variantToStyle(variant: BotAvatarVariant): {
   style: BotAvatarStyle;
@@ -43,7 +44,8 @@ export function AvatarLayer({ layer }: { layer: BotAvatarLayer }) {
 }
 
 /**
- * A bot's face: body + Eye L + Eye R, drawn from its stored `avatarSeed` (or an explicit look).
+ * A bot's face: body + Eye L + Eye R (+ brows and mouth on character faces), drawn from its
+ * stored `avatarSeed` (or an explicit look).
  * Motion is driven by props and CSS only (see globals.css, "Bot avatar motion"):
  * - `blink`: bump the number to blink once (one order fill = one blink).
  * - `pose="closed"`: eyes close with a short transition (bot stopping or stopped).
@@ -114,6 +116,17 @@ export function BotAvatar({
         <AvatarLayer key={i} layer={l} />
       ))}
       {p.visor && <path d={p.visor} fill="#0D1012" />}
+      {p.mouth && (
+        <g className="bot-avatar-mouth" fill={p.eyeColor}>
+          <path d={p.mouth} />
+        </g>
+      )}
+      {p.brows && (
+        <g className="bot-avatar-brows" fill={p.eyeColor}>
+          <path d={p.brows[0]} />
+          <path d={p.brows[1]} />
+        </g>
+      )}
       <g className="bot-avatar-look">
         <g className={cn(scanning && pose === "open" && "bot-avatar-scan")}>
           {/* Re-keyed on every blink so the CSS animation runs again. */}

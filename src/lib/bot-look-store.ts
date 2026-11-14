@@ -56,7 +56,7 @@ function readFace(): BotAvatarVariant {
   } catch {
     v = null;
   }
-  face = (BOT_AVATAR_VARIANTS as readonly string[]).includes(v ?? "") ? (v as BotAvatarVariant) : "tech";
+  face = (BOT_AVATAR_VARIANTS as readonly string[]).includes(v ?? "") ? (v as BotAvatarVariant) : "character";
   return face;
 }
 
@@ -117,7 +117,7 @@ export function resetBotLook(id: string) {
 
 /** Face style chosen in the prototype panel (v1 Tech, Tech visor, Soft, or a round 2 style). */
 export function useBotFace(): BotAvatarVariant {
-  return useSyncExternalStore(subscribe, readFace, () => "tech");
+  return useSyncExternalStore(subscribe, readFace, () => "character");
 }
 
 export function setBotFace(v: BotAvatarVariant) {

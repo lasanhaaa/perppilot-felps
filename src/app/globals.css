@@ -135,6 +135,21 @@
 .bot-avatar .bot-avatar-scan {
   animation: bot-scan 1.6s ease-in-out infinite;
 }
+/* Character faces: brows follow the eyes a little, and drop when the eyes close. */
+.bot-avatar .bot-avatar-brows {
+  transform: translate(calc(var(--look-x, 0px) * 0.3), calc(var(--look-y, 0px) * 0.5));
+  transition: transform 180ms ease-out;
+}
+.bot-avatar .bot-avatar-brows path {
+  transition: translate 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bot-avatar[data-pose="closed"] .bot-avatar-brows path {
+  translate: 0 1.4px;
+}
+.bot-avatar .bot-avatar-mouth {
+  transform: translate(calc(var(--look-x, 0px) * 0.25), calc(var(--look-y, 0px) * 0.2));
+  transition: transform 180ms ease-out;
+}
 @keyframes bot-blink {
   0%,
   100% {
@@ -162,7 +177,9 @@
   .bot-avatar .bot-avatar-scan {
     animation: none;
   }
-  .bot-avatar .bot-avatar-look {
+  .bot-avatar .bot-avatar-look,
+  .bot-avatar .bot-avatar-brows,
+  .bot-avatar .bot-avatar-mouth {
     transform: none;
   }
 }

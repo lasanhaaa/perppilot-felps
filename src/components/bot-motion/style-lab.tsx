@@ -18,25 +18,26 @@ import { MOTION_BY_ID, MOTION_STATES, type MotionStateId } from "@/lib/bot-motio
 import { cn } from "@/lib/cn";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 
-type StyleInfo = { id: BotAvatarVariant; name: string; note: string; round: 1 | 2 };
+type StyleInfo = { id: BotAvatarVariant; name: string; note: string };
 
 const STYLES: StyleInfo[] = [
-  { id: "tech2", name: "Tech 2", note: "V1 Tech, sharp and slim", round: 2 },
-  { id: "shard", name: "Shard", note: "Cut stone, lit facets", round: 2 },
-  { id: "sigil", name: "Sigil", note: "Outline, inner lines", round: 2 },
-  { id: "matrix", name: "Matrix", note: "Pixel idea, fine grid", round: 2 },
-  { id: "halo", name: "Halo", note: "Ornament above", round: 2 },
-  { id: "tech", name: "V1 Tech", note: "Backup", round: 1 },
-  { id: "visor", name: "V1 Visor", note: "Backup", round: 1 },
-  { id: "soft", name: "V1 Soft", note: "Backup", round: 1 },
+  { id: "character", name: "Character", note: "V1 Tech + personality" },
+  { id: "tech", name: "V1 Tech", note: "Backup" },
+  { id: "visor", name: "V1 Visor", note: "Backup" },
+  { id: "soft", name: "V1 Soft", note: "Backup" },
+  { id: "shard", name: "Shard", note: "Round 2: cut stone" },
+  { id: "sigil", name: "Sigil", note: "Round 2: outline" },
+  { id: "matrix", name: "Matrix", note: "Round 2: fine grid" },
+  { id: "halo", name: "Halo", note: "Round 2: ornament" },
 ];
 const STYLE_IDS = STYLES.map((s) => s.id);
 
 type Dial = { key: keyof BotAvatarTweak; label: string; min: number; max: number; step: number; unit: string; for: BotAvatarVariant[] };
 const DIALS: Dial[] = [
-  { key: "eye", label: "Eye size", min: 0.7, max: 1.5, step: 0.05, unit: "×", for: ["tech2", "shard", "sigil", "halo"] },
+  { key: "eye", label: "Face size", min: 0.7, max: 1.4, step: 0.05, unit: "×", for: ["character", "shard", "sigil", "halo"] },
+  { key: "corner", label: "Corners", min: 0, max: 3, step: 0.25, unit: "", for: ["character"] },
   { key: "line", label: "Line weight", min: 0.75, max: 3, step: 0.25, unit: "px", for: ["sigil"] },
-  { key: "detail", label: "Detail", min: 0, max: 1.6, step: 0.05, unit: "×", for: ["tech2", "shard", "sigil", "halo"] },
+  { key: "detail", label: "Detail", min: 0, max: 1.6, step: 0.05, unit: "×", for: ["shard", "sigil", "halo"] },
   { key: "gap", label: "Cell gap", min: 0.4, max: 2.8, step: 0.1, unit: "", for: ["matrix"] },
 ];
 
@@ -76,7 +77,7 @@ export function StyleLab() {
   const [playAnyway, setPlayAnyway] = useState(false);
   const paused = reduced && !playAnyway;
   const seeds = useMemo(() => uniqueBotSeeds(20261114, 8), []);
-  const [variant, setVariant] = useState<BotAvatarVariant>("tech2");
+  const [variant, setVariant] = useState<BotAvatarVariant>("character");
   const [look, setLook] = useState<Look>(() => botAvatarFromSeed(seeds[0]));
   const [tweak, setTweak] = useState<BotAvatarTweak>(BOT_AVATAR_TWEAK);
   const [state, setState] = useState<MotionStateId>("idle");
@@ -95,7 +96,13 @@ export function StyleLab() {
     /* eslint-disable react-hooks/set-state-in-effect -- one-time read of the shared link */
     if (v && STYLE_IDS.includes(v)) setVariant(v);
     setLook((l) => ({ shape: int("shape", 12, l.shape), eyes: int("eyes", 8, l.eyes), color: int("color", 8, l.color) }));
-    setTweak((t) => ({ eye: num("eye", t.eye), line: num("line", t.line), detail: num("detail", t.detail), gap: num("gap", t.gap) }));
+    setTweak((t) => ({
+      eye: num("eye", t.eye),
+      line: num("line", t.line),
+      detail: num("detail", t.detail),
+      gap: num("gap", t.gap),
+      corner: num("corner", t.corner),
+    }));
     setReady(true);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
@@ -110,12 +117,14 @@ export function StyleLab() {
       line: `${tweak.line}`,
       detail: `${tweak.detail}`,
       gap: `${tweak.gap}`,
+      corner: `${tweak.corner}`,
     });
     window.history.replaceState(null, "", `?${q}`);
   }, [ready, variant, look, tweak]);
 
   const { style } = variantToStyle(variant);
   const { shapes, eyes } = BOT_AVATAR_PARTS[style];
+  const faceLabel = style === "character" ? "Face" : "Eyes";
   const looks = useMemo(() => seeds.map((s) => botAvatarFromSeed(s)), [seeds]);
   const info = STYLES.find((s) => s.id === variant)!;
   const dials = DIALS.filter((d) => d.for.includes(variant));
@@ -148,8 +157,9 @@ export function StyleLab() {
           </div>
           <h1 className="text-[24px] leading-[1.5] font-medium">Bot styles</h1>
           <p className="max-w-[760px] text-[16px] leading-[1.5] text-white/60">
-            Round 2 of the bot faces: sharper, slimmer and stranger heads in four treatments. V1 stays as the backup. Every
-            style keeps the same rig, so all the motion works on it.
+            Character is the current direction: the V1 Tech heads, flat, with a personality per face, built from dark
+            cut-outs only. V1 and round 2 stay below for comparison. Every style keeps the same rig, so all the motion
+            works on it.
           </p>
           {paused && (
             <p className="text-[14px] text-white/60">
@@ -264,8 +274,10 @@ export function StyleLab() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label>Eyes · {eyes[look.eyes % eyes.length].name}</Label>
-              <div role="radiogroup" aria-label="Eyes" className="grid grid-cols-8 gap-1">
+              <Label>
+                {faceLabel} · {eyes[look.eyes % eyes.length].name}
+              </Label>
+              <div role="radiogroup" aria-label={faceLabel} className="grid grid-cols-8 gap-1">
                 {eyes.map((e, i) => (
                   <button
                     key={e.name}
@@ -334,6 +346,31 @@ export function StyleLab() {
                 ))}
               </div>
             )}
+          </div>
+        </section>
+
+        <section aria-labelledby="all-faces" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 id="all-faces" className="text-[18px] font-medium">
+              {info.name}: every face
+            </h2>
+            <p className="text-[14px] text-white/50">Same head and color, each face on it. Hover a face; click it to put it on the stage.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+            {eyes.map((e, i) => (
+              <button
+                key={e.name}
+                type="button"
+                onClick={() => setLook({ ...look, eyes: i })}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-[4px] border pt-2 pb-3",
+                  look.eyes === i ? "border-white/60 bg-white/5" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]",
+                )}
+              >
+                <GridFace look={{ ...look, eyes: i }} variant={variant} seed={seeds[i]} size={72} tweak={tweak} paused={paused} />
+                <span className="text-[13px] text-white/60">{e.name}</span>
+              </button>
+            ))}
           </div>
         </section>
 

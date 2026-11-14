@@ -18,6 +18,29 @@ The first version (7×7 pixel robots) was rejected by the client as too gamified
 - Layers: Body, Eye L, Eye R. Only the eyes ever move.
 - Sizes: 28 (lists), 54 / 56 (cards), 84+ (detail, editor preview).
 
+## Character (current direction, 2026-11-14)
+
+felipe's call after round 2: keep the V1 Tech silhouettes (the slimmer "Tech 2" redraw and its
+engraved details were rejected), keep them flat (no floor shadow, no dark side on turns), and give
+every bot a personality, while staying serious, geometric and tech. No colored eyes or mouths.
+
+- Code: `src/lib/bot-avatar-character.ts`, style `character`, the default face on `/bot-styles`
+  and in the product Face switch.
+- Heads: the 12 V1 Tech outlines, with sharp corners by default (the "Corners" dial on
+  `/bot-styles` brings back the V1 rounding).
+- Faces (the stored `eyes` index): **Stoic** (square eyes, flat brows), **Focused** (eye tops
+  slope down toward the middle, flat mouth), **Deadpan** (half-lidded eyes, heavy lids, mouth off
+  to one side), **Curious** (one big and one small eye, one raised brow, small square mouth),
+  **Sentinel** (one wide eye under one heavy brow, grille mouth), **Talker** (tall bar eyes over a
+  speaker grille), **Sly** (side glance, short slanted mouth), **Shades** (two lenses and a bridge).
+- Every feature is a straight-edged dark cut-out (`#0D1012`). Features are 25% larger than the
+  V1 tech eyes so brows and mouths still read at 24 px.
+- Layers: Body, Eye L, Eye R, Brow L, Brow R, Mouth (brows and mouth only where the face has them).
+- Motion: brows and mouth sit on the same head sphere as the eyes. Brows lift when the eyes widen,
+  tilt inner ends up on Needs help and Out of range, one brow rises while Thinking, they pull in
+  while Placing orders, lift on Done, and drop when the eyes close. The mouth widens on Done and
+  tightens on Needs help and Thinking.
+
 ## Round 2 styles (2026-11-14)
 
 Feedback: the v1 faces read too chunky and rounded. V1 (soft, tech, tech visor) stays in the code
@@ -33,11 +56,6 @@ style):
   crown, antenna, horns or a forehead mark);
 - same three stored indices as v1, so any saved look maps 1:1; the motion rig works on all of
   them (slim heads get a smaller turning sphere).
-
-**Tech 2** (felipe's pick to work on, 2026-11-14) is V1 Tech made sharper: the same 12 shape
-names with straight corners and 45° chamfers, bodies about 36–40 wide instead of 50, smaller sharp
-eyes (Lenses and Oracle added), fine dark engravings (seam, horizon, glyph, ticks, frame, chin)
-tuned by the Detail dial, and no shadows: no floor shadow and no dark side when the head turns.
 
 The "Face" switch in both Motion prototype panels shows every style on the real screens.
 
