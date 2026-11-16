@@ -148,13 +148,17 @@ export type Pose = {
   arrow: number;
   /** −1 = price above the range (arrow up), 1 = below (arrow down). */
   arrowDir: number;
+  /** P&L update on a fill: visibility, progress of the sign's flight (0..1), 1 = gain, −1 = loss. */
+  pnl: number;
+  pnlRise: number;
+  pnlSign: number;
 };
 
 export const REST: Pose = {
   x: 0, y: 0, rot: 0, sx: 1, sy: 1, sq: 0, tilt: 0, turn: 0, spin: 0, gx: 0, gy: 0,
   openL: 1, openR: 1, eye: 1, alpha: 1,
   dots: 0, zzz: 0, alert: 0, notify: 0, burst: 0, check: 0, checkA: 0, checkPop: 0, ring: 0, orbit: 0,
-  send: 0, sendDir: 1, arrow: 0, arrowDir: -1,
+  send: 0, sendDir: 1, arrow: 0, arrowDir: -1, pnl: 0, pnlRise: 0, pnlSign: 1,
 };
 
 /** Fields scaled by the intensity control (deviation from rest). Extras keep their size. */
@@ -175,7 +179,7 @@ export type MotionGroup = "Lifecycle" | "Working" | "Attention";
 
 export type MotionStateId =
   | "spawning" | "waking" | "idle" | "stopping" | "sleeping"
-  | "connecting" | "thinking" | "scanning" | "working" | "filled" | "done"
+  | "connecting" | "thinking" | "scanning" | "working" | "filled" | "pnlUp" | "pnlDown" | "done"
   | "looking" | "waiting" | "outOfRange" | "alert"
   /** Grid states (not in the gallery): a still face that only blinks, and a dimmed closed one. */
   | "still" | "dozing";
@@ -617,6 +621,84 @@ export const MOTION_STATES: readonly MotionState[] = [
     },
   },
   {
+    id: "pnlUp",
+    name: "Fill · P&L up",
+    group: "Working",
+    when: "A fill closes with a gain: the bot's P&L goes up.",
+    motion: "The Order filled jump and spin; on the landing a + in earnings green pops out of the head and floats up with a few green bits, happy eyes, brows up.",
+    where: "Bots grid (one bot at a time) and Bot Detail, instead of Order filled when the fill realizes a gain.",
+    kind: "once",
+    duration: 2.1,
+    rest: 1.4,
+    blink: [3, 6],
+    still: 1.3,
+    pose: (t) => {
+      // Same take-off as Order filled, so a fill always reads as a fill; the gain is the payoff.
+      const jump = hops(t, [[0.26, 0.6, 17], [0.98, 0.2, 2.6]], 0.17);
+      const happy = kf(t, [[0.88, 0], [1.04, 1, EASE.out], [1.78, 1], [2.04, 0, EASE.inOut]]);
+      const wind = kf(t, [[0, 0], [0.24, 1, EASE.inOut], [0.3, 0, EASE.snap]]);
+      const br = t > 2 ? breathe(t) : { y: 0, sq: 0 };
+      return {
+        y: jump.y + br.y,
+        sq: jump.sq + br.sq,
+        spin: kf(t, [[0.3, 0], [0.82, 1, EASE.spin]]),
+        rot: kf(t, [[0.24, 0], [0.42, -4, EASE.out], [0.78, 3, EASE.inOut], [1.02, 0, EASE.inOut]]),
+        // A small proud tilt while the + rises; the eyes follow it up.
+        tilt: kf(t, [[1.0, 0], [1.24, 5, EASE.out], [1.8, 5], [2.06, 0, EASE.inOut]]),
+        gy: 0.35 * wind - 0.55 * happy,
+        openL: 1 - 0.3 * wind - 0.5 * happy,
+        openR: 1 - 0.3 * wind - 0.5 * happy,
+        eye: 1 + 0.08 * happy,
+        pnl: kf(t, [[0.86, 0], [0.92, 1, EASE.snap], [1.72, 1], [2.04, 0, EASE.in]]),
+        pnlRise: clamp((t - 0.86) / 1.18, 0, 1),
+        pnlSign: 1,
+      };
+    },
+  },
+  {
+    id: "pnlDown",
+    name: "Fill · P&L down",
+    group: "Working",
+    when: "A fill closes with a loss: the bot's P&L goes down.",
+    motion: "A quick flinch (dips, squints, leans away), a − in red drops past its side with a few red bits, the eyes open and follow it down, worried brows, then a small head shake and back to work.",
+    where: "Bots grid (one bot at a time) and Bot Detail, instead of Order filled when the fill realizes a loss. Composed, never sad: losses are part of trading.",
+    kind: "once",
+    duration: 2.3,
+    rest: 1.3,
+    blink: [3, 6],
+    enter: "cut",
+    still: 0.55,
+    pose: (t) => {
+      // Flinch: almost instant (snap), then a slower release.
+      const flinch = kf(t, [[0, 0], [0.08, 1, EASE.snap], [0.42, 0, EASE.inOut]]);
+      const squint = kf(t, [[0, 0], [0.06, 1, EASE.snap], [0.24, 0, EASE.out]]);
+      // Watches the − fall, then lets it go.
+      const watch = kf(t, [[0.14, 0], [0.34, 1, EASE.out], [1.0, 1], [1.24, 0, EASE.inOut]]);
+      const fall = kf(t, [[0.3, 0], [0.95, 1, EASE.in]]);
+      // Shake it off: two small head shakes that decay.
+      const shake = kf(t, [[1.18, 0], [1.3, 0.16, EASE.out], [1.44, -0.12, EASE.inOut], [1.58, 0.06, EASE.inOut], [1.72, 0, EASE.inOut]]);
+      // Back to work: a small nod.
+      const nod = kf(t, [[1.78, 0], [1.88, 1, EASE.out], [2.12, 0, EASE.inOut]]);
+      const br = t > 2.1 ? breathe(t) : { y: 0, sq: 0 };
+      return {
+        y: 2.4 * flinch + 1.2 * nod + br.y,
+        sq: 0.09 * flinch + 0.02 * nod + br.sq,
+        rot: -2.5 * flinch,
+        x: -1.6 * flinch,
+        tilt: -5 * flinch + 3 * watch * (1 - fall * 0.3),
+        turn: 0.22 * watch + shake,
+        gx: 0.7 * watch,
+        gy: 0.25 * watch + 0.55 * watch * fall + 0.3 * nod,
+        openL: 1 - 0.8 * squint,
+        openR: 1 - 0.8 * squint,
+        eye: 1 + 0.1 * watch * (1 - fall * 0.5),
+        pnl: kf(t, [[0.08, 0], [0.16, 1, EASE.snap], [0.8, 1], [1.12, 0, EASE.in]]),
+        pnlRise: clamp((t - 0.1) / 1.0, 0, 1),
+        pnlSign: -1,
+      };
+    },
+  },
+  {
     id: "done",
     name: "Done",
     group: "Working",
@@ -817,6 +899,8 @@ export const MOTION_STORY: readonly { id: MotionStateId; hold: number }[] = [
   { id: "thinking", hold: 3.6 },
   { id: "working", hold: 2.5 },
   { id: "filled", hold: 2.3 },
+  { id: "pnlUp", hold: 2.5 },
+  { id: "pnlDown", hold: 2.7 },
   { id: "scanning", hold: 3.6 },
   { id: "outOfRange", hold: 4.6 },
   { id: "alert", hold: 3.8 },

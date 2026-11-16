@@ -133,8 +133,14 @@ export function BotsOverview() {
         const candidates = onScreen(list.filter((b) => b.runState === "active" && b.rangeStatus === "in-range"));
         const bot = candidates.length ? pick(candidates) : null;
         if (bot) {
-          playOn(bot.id, "filled");
-          setLastEvent(`${name(bot)} · order filled → hop, spin, burst`);
+          // Each fill moves the bot's P&L: mostly up for bots in profit, mostly down for the others.
+          const gain = Math.random() < (bot.netFees >= 0 ? 0.75 : 0.35);
+          playOn(bot.id, gain ? "pnlUp" : "pnlDown");
+          setLastEvent(
+            gain
+              ? `${name(bot)} · fill, P&L up → jump, spin, + floats up`
+              : `${name(bot)} · fill, P&L down → flinch, − drops, shakes it off`,
+          );
         }
       }
       id = window.setTimeout(tick, 4000 + Math.random() * 3000);

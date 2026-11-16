@@ -23,6 +23,8 @@ import {
 /** Status colors for the extras that mean status: Error/Out of range red, Completed green. */
 const RED = "#FF3737";
 const SUCCESS = "#2ABB78";
+/** Earnings green, for a P&L gain (never brand mint). */
+const GAIN = "#4ADE80";
 /**
  * Radius of the head sphere the eyes sit on, in face units (the face is 56 wide). Slim heads get a
  * smaller sphere (88% of their half width), so turning eyes stay on the face.
@@ -112,7 +114,7 @@ function bindPointer() {
 const n = (v: number) => Math.round(v * 100) / 100;
 /** Grid faces: an offset rounded to whole cells, at most one cell away. */
 const snap = (v: number, g: number) => clamp(Math.round(v / g), -1, 1) * g;
-const PROGRESS = new Set<keyof Pose>(["burst", "check", "ring", "sendDir", "arrowDir"]);
+const PROGRESS = new Set<keyof Pose>(["burst", "check", "ring", "sendDir", "arrowDir", "pnlRise", "pnlSign"]);
 
 function mix(a: Pose, b: Pose, k: number): Pose {
   const out = { ...b };
@@ -284,6 +286,9 @@ export function MotionAvatar({
       send: qa<SVGRectElement>("send"),
       arrow: q<SVGGElement>("arrow")!,
       arrowParts: qa<SVGPathElement>("arrow-part"),
+      pnl: q<SVGGElement>("pnl")!,
+      pnlStem: q<SVGRectElement>("pnl-stem")!,
+      pnlBits: qa<SVGRectElement>("pnl-bit"),
     };
 
     const blinkGap = (rt: Runtime, range: readonly [number, number]) => {
@@ -388,10 +393,12 @@ export function MotionAvatar({
         const depth = Math.cos(phi);
         return { px: fx + R * Math.sin(phi), wf: Math.max(0.001, Math.max(0, depth) / Math.cos(lam)), depth };
       };
-      const worry = clamp(p.alert + 0.7 * p.arrow, 0, 1);
+      const gain = p.pnlSign > 0 ? clamp(p.pnl, 0, 1) : 0;
+      const loss = p.pnlSign < 0 ? clamp(p.pnl, 0, 1) : 0;
+      const worry = clamp(p.alert + 0.7 * p.arrow + 0.85 * loss, 0, 1);
       const glance = p.gx * 2.8;
       if (el.brows.length) {
-        const lift = -(p.eye - 1) * 9 - 2.2 * worry - 1.4 * clamp(p.checkA, 0, 1);
+        const lift = -(p.eye - 1) * 9 - 2.2 * worry - 1.4 * clamp(p.checkA, 0, 1) - 1.6 * gain;
         geo.brows.forEach((b, i) => {
           const s = onSphere(b.x);
           const open = clamp(i === 0 ? p.openL : p.openR, 0, 1);
@@ -409,7 +416,7 @@ export function MotionAvatar({
       if (el.mouth && geo.mouth) {
         const m = geo.mouth;
         const s = onSphere(m.x);
-        const sx = 1 + 0.22 * clamp(p.checkA, 0, 1) - 0.18 * worry - 0.25 * p.dots;
+        const sx = 1 + 0.22 * clamp(p.checkA, 0, 1) + 0.25 * gain - 0.18 * worry - 0.25 * p.dots;
         const sy = 1 + 0.3 * worry;
         el.mouth.setAttribute(
           "transform",
@@ -556,6 +563,31 @@ export function MotionAvatar({
         const ph = frac(t / 1.3 + j * 0.5);
         a.setAttribute("transform", `translate(0 ${n(6 - 12 * EASE.inOut(ph))})`);
         a.setAttribute("opacity", `${n(kf(ph, [[0, 0], [0.3, 1, EASE.out], [0.6, 1], [1, 0, EASE.in]]))}`);
+      });
+
+      // P&L on a fill: a + pops out of the head and floats up (decelerating, like it is light),
+      // or a − drops past the side (accelerating, like it is heavy). Bits follow a beat apart.
+      const up = p.pnlSign >= 0;
+      const pr = clamp(p.pnlRise, 0, 1);
+      const pop = kf(pr, [[0, 0.4], [0.1, 1.18, EASE.out], [0.26, 1, EASE.inOut]]);
+      const color = up ? GAIN : RED;
+      const sx0 = up ? fx : right + 7;
+      const sy0 = up ? top - 5 - 16 * EASE.out(pr) : fy - 10 + 26 * EASE.in(pr);
+      el.pnl.setAttribute("transform", `translate(${n(sx0)} ${n(sy0)}) scale(${n(pop)})`);
+      el.pnl.setAttribute("opacity", `${n(clamp(p.pnl, 0, 1))}`);
+      el.pnl.setAttribute("fill", color);
+      el.pnlStem.setAttribute("opacity", up ? "1" : "0");
+      el.pnlBits.forEach((bit, j) => {
+        const ph = clamp((pr - 0.06 - j * 0.09) / 0.7, 0, 1);
+        const bx = up ? fx + (j - 1) * 9 + (j - 1) * 3 * ph : right + 2 + j * 5;
+        const by = up ? top - 2 - 22 * EASE.out(ph) : fy - 4 + j * 3 + 22 * EASE.in(ph);
+        const size = 2.6 * (1 - 0.4 * ph);
+        bit.setAttribute("x", `${n(bx - size / 2)}`);
+        bit.setAttribute("y", `${n(by - size / 2)}`);
+        bit.setAttribute("width", `${n(size)}`);
+        bit.setAttribute("height", `${n(size)}`);
+        bit.setAttribute("fill", color);
+        bit.setAttribute("opacity", ph > 0 && ph < 1 ? `${n(clamp(p.pnl, 0, 1) * (1 - EASE.in(ph)))}` : "0");
       });
     };
 
@@ -832,6 +864,13 @@ export function MotionAvatar({
         ))}
         {[0, 1, 2].map((j) => (
           <rect key={j} data-p="send" width={3.2} height={3.2} fill={parts.color} opacity={0} />
+        ))}
+        <g data-p="pnl" opacity={0} fill={GAIN}>
+          <rect x={-4.5} y={-1.5} width={9} height={3} />
+          <rect data-p="pnl-stem" x={-1.5} y={-4.5} width={3} height={9} />
+        </g>
+        {[0, 1, 2].map((j) => (
+          <rect key={j} data-p="pnl-bit" width={2.6} height={2.6} fill={GAIN} opacity={0} />
         ))}
         <g data-p="arrow" opacity={0} fill="none" stroke={RED} strokeWidth={2.2} strokeLinecap="square">
           <path data-p="arrow-part" d="M-5 2.5L0 -2.5L5 2.5" opacity={0} />

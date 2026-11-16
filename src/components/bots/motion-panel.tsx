@@ -210,7 +210,7 @@ export function MotionPanel({
         </ProtoButton>
       </div>
       <ul className="flex flex-col gap-1 text-[12px] leading-[1.45] text-white/40">
-        <li>Order fill: hop, spin and burst. One bot at a time.</li>
+        <li>Order fill: P&L up (jump, spin, a green + floats up) or P&L down (flinch, a red − drops). One bot at a time.</li>
         <li>Hover a card: that bot looks at you.</li>
         <li>Others hold still and blink. Stopped bots doze.</li>
       </ul>

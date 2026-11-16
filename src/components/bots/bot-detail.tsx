@@ -810,8 +810,10 @@ export function BotDetail({ bot }: { bot: Bot }) {
     });
   }, [later]);
 
-  const fill = useCallback(() => {
+  /** A fill; `gain` says which way it moves the P&L (random when not given, mostly up). */
+  const fill = useCallback((gain?: boolean) => {
     if (run !== "running") return;
+    const up = gain ?? Math.random() < 0.7;
     const buy = Math.random() < 0.55;
     const t: Trade = {
       id: `fill-${Date.now()}`,
@@ -823,8 +825,12 @@ export function BotDetail({ bot }: { bot: Bot }) {
     setTrades((list) => [t, ...list].slice(0, 8));
     setFresh(t.id);
     setFills((n) => n + 1);
-    play("filled");
-    setEvent(`Order filled (${t.side}): hop, spin, burst`);
+    play(up ? "pnlUp" : "pnlDown");
+    setEvent(
+      up
+        ? `Order filled (${t.side}), P&L up: jump, spin, a green + floats up`
+        : `Order filled (${t.side}), P&L down: flinch, a red − drops, shakes it off`,
+    );
   }, [run, d.sizeUnit, mark, play]);
 
   // A quiet stream of fills while the bot runs in range, so the page feels alive.
@@ -1058,8 +1064,11 @@ export function BotDetail({ bot }: { bot: Bot }) {
       <PrototypeDock title="Motion prototype" event={event} reducedMotion={reduced}>
         <FaceSegment value={face} onChange={setBotFace} />
         <div className="grid grid-cols-2 gap-2">
-          <ProtoButton onClick={fill} disabled={run !== "running"}>
-            Order fill
+          <ProtoButton onClick={() => fill(true)} disabled={run !== "running"}>
+            Fill · P&L up
+          </ProtoButton>
+          <ProtoButton onClick={() => fill(false)} disabled={run !== "running"}>
+            Fill · P&L down
           </ProtoButton>
           <ProtoButton
             onClick={() => {

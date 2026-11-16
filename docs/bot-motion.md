@@ -14,7 +14,7 @@ so the whole head can turn, spin, hop, lean, squash and stretch. Moving only the
 | Spin | A full turn of the head (back of the head shows halfway). Used for New bot, Order filled and Connecting. |
 | Body | Move, lean (pivot at the feet), squash and stretch (pivot at the feet), head tilt (pivot at the face center). A floor spot shrinks when the bot is in the air. |
 | Eyes | Gaze inside the face, opening per eye (wink), size (surprise). Blink = 320 ms, closes in 42%, opens in 58%, random gap per state, 18% double blinks. |
-| Extras | Thinking dots, sleeping z's, red ! (Error), white notification dot, green check (Completed), burst in the bot color, radar ring, orbit squares, order squares, red range arrow. |
+| Extras | Thinking dots, sleeping z's, red ! (Error), white notification dot, green check (Completed), burst in the bot color, radar ring, orbit squares, order squares, red range arrow, P&L sign (+ in earnings green, − in red) with bits. |
 
 Every state is a pure function of time, so a state looks the same everywhere. State changes blend
 for 350 ms from the current pose. Two bots in the same state never move in sync (per-bot seed).
@@ -51,7 +51,9 @@ How the motion is built so it reads like an animator's work, not a formula:
 | Thinking | Loop | Range suggestion, backtest, saving | Turns away, looks up to one side, tilts, switches sides, three dots |
 | Watching the market | Loop | Active, no open orders | Radar sweep of the head, narrowed eyes, ring ping at each end |
 | Placing orders | Loop | Opening/closing positions, rebalancing | Three busy hops looking at the work, order squares fly out, glance at you |
-| Order filled | Once | New line in Recent trades | Crouch, jump, full spin in the air, squash landing, burst, happy eyes |
+| Order filled | Once | New line in Recent trades, no realized P&L | Crouch, jump, full spin in the air, squash landing, burst, happy eyes |
+| Fill · P&L up | Once | A fill closes with a gain | The Order filled jump and spin; on landing a + in earnings green (#4ADE80) pops out of the head and floats up (decelerating) with green bits, happy eyes, brows up, proud tilt |
+| Fill · P&L down | Once | A fill closes with a loss | Flinch (dips, squints, leans away), a − in red (#FF3737) drops past its side (accelerating) with red bits, eyes follow it down, worried brows, two small head shakes, a nod and back to work. Composed, never sad |
 | Done | Once | User task finished (never tied to profit) | Two nods, content eyes, check draws, tilt |
 | Looks at you | Loop | Hover or editing the avatar | Head and eyes follow the pointer; figure eight without one |
 | Waiting for you | Loop | User action needed, nothing broken | Wide eyes, double hop, curious tilts, notification dot |
@@ -71,8 +73,8 @@ Out of range takes a direction: price above the range leans up, price below lean
 
 | Screen | What moves |
 | --- | --- |
-| Bots overview (`/bots`) | Cards: Still, Dozing when stopped, Looks at you on hover. One-shots one bot at a time: Order filled every few seconds, Stopping, Starting then Connecting, Needs help once per bot when the Error tab opens. |
-| Bot Detail (`/bots/[id]`) | Header face: Running (follows the pointer), Watching the market or Placing orders by activity, Out of range up or down, Waiting for you (Add funds notice), Needs help (Update keys notice), Stopped, Starting then Connecting, Order filled with a new line in Recent trades. Hover shows Looks at you. |
+| Bots overview (`/bots`) | Cards: Still, Dozing when stopped, Looks at you on hover. One-shots one bot at a time: a fill every few seconds (Fill · P&L up, or P&L down; mostly up for bots in profit), Stopping, Starting then Connecting, Needs help once per bot when the Error tab opens. |
+| Bot Detail (`/bots/[id]`) | Header face: Running (follows the pointer), Watching the market or Placing orders by activity, Out of range up or down, Waiting for you (Add funds notice), Needs help (Update keys notice), Stopped, Starting then Connecting, Fill · P&L up or P&L down with a new line in Recent trades. Hover shows Looks at you. |
 | Avatar editor | Looks at you; Randomize plays Order filled once. |
 
 The overview and Bot Detail have a foldable "Motion prototype" panel to trigger the rare events. It is
