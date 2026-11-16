@@ -13,8 +13,9 @@ import { cn } from "@/lib/cn";
 /**
  * How the face is drawn. "character" (current direction): the V1 Tech heads, flat, with a
  * personality per face (src/lib/bot-avatar-character.ts). "techflat": V1 Tech with sharp corners and
- * no shadows, nothing else changed. "glyph": new heads with notches, ears, legs and bites, and
- * small eyes (src/lib/bot-avatar-glyph.ts). v1 (the backup): the tech geometry with
+ * no shadows, nothing else changed. "glyph": the final faces (2026-11-16), 12 heads with notches,
+ * ears, legs and bites (src/lib/bot-avatar-glyph.ts) with the V1 Tech eyes, sharp and flat; the
+ * default everywhere. v1 (the backup): the tech geometry with
  * cut-out eyes or a visor, or the soft geometry. Round 2: shard, sigil, matrix and halo
  * (see src/lib/bot-avatar-geo.ts).
  */
@@ -70,7 +71,7 @@ export function AvatarLayer({ layer }: { layer: BotAvatarLayer }) {
 export function BotAvatar({
   seed,
   avatar,
-  variant = "tech",
+  variant = "glyph",
   size = 56,
   pose = "open",
   blink = 0,

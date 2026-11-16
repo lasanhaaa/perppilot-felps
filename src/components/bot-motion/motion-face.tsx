@@ -16,7 +16,7 @@ const FACE = 0.56;
  */
 export function MotionFace({
   avatar,
-  variant = "tech",
+  variant = "glyph",
   state,
   size,
   playKey,

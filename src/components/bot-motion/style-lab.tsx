@@ -21,7 +21,7 @@ import { useReducedMotion } from "@/lib/use-reduced-motion";
 type StyleInfo = { id: BotAvatarVariant; name: string; note: string };
 
 const STYLES: StyleInfo[] = [
-  { id: "glyph", name: "Glyph", note: "New heads, small eyes" },
+  { id: "glyph", name: "Final", note: "Glyph heads, V1 Tech eyes" },
   { id: "character", name: "Character", note: "V1 Tech + personality" },
   { id: "techflat", name: "V1 Tech flat", note: "No rounding, no shadow" },
   { id: "tech", name: "V1 Tech", note: "Backup" },
@@ -160,9 +160,9 @@ export function StyleLab() {
           </div>
           <h1 className="text-[24px] leading-[1.5] font-medium">Bot styles</h1>
           <p className="max-w-[760px] text-[16px] leading-[1.5] text-white/60">
-            Glyph explores new heads (notches, ears, legs, bites) with small eyes set close together. Character and V1
-            Tech flat keep the V1 Tech heads. V1 and round 2 stay for comparison. Every style keeps the same rig, so all
-            the motion works on it.
+            Final: 12 heads with notches, ears, legs and bites (10 glyph heads, plus Step and Twin cut from V1 Tech) and
+            the V1 Tech eyes, flat with sharp corners. It is the face on every Bots screen. The other styles stay for
+            comparison. Every style keeps the same rig, so all the motion works on it.
           </p>
           {paused && (
             <p className="text-[14px] text-white/60">

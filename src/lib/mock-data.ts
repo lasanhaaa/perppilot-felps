@@ -49,7 +49,9 @@ const seeds: BotSeed[] = [
 ];
 
 // Looks never repeat inside the account (the backend keeps (user_id, avatar_signature) unique).
-const avatarSeeds = uniqueBotSeeds(20261113, seeds.length);
+// The start seed is picked so the demo account shows a varied cast of the final heads: no head
+// repeats inside the V3 or the PointBot row, and the first 12 bots cover 11 of the 12 heads.
+const avatarSeeds = uniqueBotSeeds(20271357, seeds.length);
 
 export const bots: Bot[] = seeds.map((s, i) => {
   const noResult = s.rangeStatus === "no-result";

@@ -1,5 +1,6 @@
 /**
- * "Glyph" heads and small eyes (2026-11-14, exploration).
+ * "Glyph" heads: the final bot faces (felipe, 2026-11-16). Explored on 2026-11-14 with 18 heads and
+ * small eyes; the final set keeps 10 glyph heads plus two V1 Tech heads, with the V1 Tech eyes.
  *
  * felipe: some heads are too basic (square, hexagon, diamond), some do not work (the slim round 2
  * set), and the eyes are too big. Reference: an agent mascot drawn as one flat silhouette with
@@ -11,7 +12,7 @@
  * curves are the bites and bumps.
  */
 
-import type { BotAvatarEyes, BotAvatarShape } from "./bot-avatar";
+import type { BotAvatarShape } from "./bot-avatar";
 
 type V = [number, number];
 const f = (n: number) => +n.toFixed(2);
@@ -100,14 +101,14 @@ const GLYPHS: Glyph[] = [
     name: "Moth",
     core: [8, 8, 48, 48],
     edges: [[{ k: "v", w: 14, d: 7 }], [{ k: "bite", r: 6 }], [{ k: "v", w: 14, d: 8 }], [{ k: "bite", r: 6 }]],
-    eye: [28, 25],
+    eye: [28, 26],
   },
   {
     name: "Beetle",
     core: [9, 8, 47, 48],
     corners: ["sq", "sq", ["cut", 5], ["cut", 5]],
     edges: [[{ k: "slot", w: 12, d: 7 }], [], [{ k: "slot", w: 10, d: 8 }]],
-    eye: [28, 26],
+    eye: [28, 27.5],
   },
   {
     name: "Owl",
@@ -148,72 +149,13 @@ const GLYPHS: Glyph[] = [
     core: [10, 15, 46, 50],
     corners: ["sq", "sq", ["cut", 5], ["cut", 5]],
     edges: [[{ k: "slot", w: 6, d: -9, at: 0.25 }, { k: "slot", w: 6, d: -9, at: 0.75 }]],
-    eye: [28, 31],
-  },
-  {
-    name: "Helmet",
-    core: [7, 12, 49, 48],
-    corners: ["sq", "sq", ["cut", 9], ["cut", 9]],
-    edges: [[{ k: "bump", r: 11 }], [{ k: "slot", w: 10, d: -5, at: 0.4 }], [], [{ k: "slot", w: 10, d: -5, at: 0.6 }]],
-    eye: [28, 27],
-  },
-  {
-    name: "Ticket",
-    core: [6, 10, 50, 46],
-    corners: [["scoop", 7], ["scoop", 7], ["scoop", 7], ["scoop", 7]],
-    edges: [[], [{ k: "bite", r: 5 }], [], [{ k: "bite", r: 5 }]],
-    eye: [28, 27],
-  },
-  {
-    name: "Hourglass",
-    core: [9, 5, 47, 51],
-    edges: [[], [{ k: "v", w: 30, d: 7 }], [], [{ k: "v", w: 30, d: 7 }]],
-    eye: [28, 17],
-  },
-  {
-    name: "Totem",
-    core: [14, 5, 42, 51],
-    corners: [["cut", 4], ["cut", 4], ["cut", 4], ["cut", 4]],
-    edges: [[{ k: "v", w: 8, d: 4 }], [{ k: "slot", w: 12, d: -8, at: 0.5 }], [], [{ k: "slot", w: 12, d: -8, at: 0.5 }]],
-    eye: [28, 18],
-  },
-  {
-    name: "Mantis",
-    core: [10, 12, 46, 50],
-    edges: [
-      [{ k: "trap", w: 8, t: 3, h: 9, at: 0.17 }, { k: "trap", w: 8, t: 3, h: 9, at: 0.83 }],
-      [{ k: "bite", r: 4, at: 0.62 }],
-      [{ k: "v", w: 12, d: 7 }],
-      [{ k: "bite", r: 4, at: 0.38 }],
-    ],
-    eye: [28, 26],
+    eye: [28, 32],
   },
   {
     name: "Badge",
     core: [8, 6, 48, 42],
     edges: [[{ k: "slot", w: 10, d: 5 }], [], [{ k: "v", w: 40, d: -11 }]],
-    eye: [28, 23],
-  },
-  {
-    name: "Lantern",
-    core: [10, 11, 46, 45],
-    corners: [["scoop", 5], ["scoop", 5], ["scoop", 5], ["scoop", 5]],
-    edges: [[{ k: "slot", w: 16, d: -6 }], [], [{ k: "slot", w: 16, d: -6 }]],
-    eye: [28, 27],
-  },
-  {
-    name: "Comet",
-    core: [5, 8, 41, 48],
-    corners: ["sq", "sq", ["cut", 6], "sq"],
-    edges: [[{ k: "v", w: 10, d: 6, at: 0.4 }], [{ k: "bump", r: 11 }], [{ k: "slot", w: 8, d: 7, at: 0.4 }], [{ k: "bite", r: 5 }]],
-    eye: [23, 25],
-  },
-  {
-    name: "Rune",
-    core: [6, 6, 50, 50],
-    corners: [["notch", 11], ["notch", 11], ["notch", 11], ["notch", 11]],
-    edges: [[{ k: "v", w: 10, d: 4 }], [{ k: "v", w: 10, d: 4 }], [{ k: "v", w: 10, d: 4 }], [{ k: "v", w: 10, d: 4 }]],
-    eye: [28, 27],
+    eye: [28, 24],
   },
   {
     name: "Bolt",
@@ -224,33 +166,26 @@ const GLYPHS: Glyph[] = [
   },
 ];
 
-export const GLYPH_SHAPES: BotAvatarShape[] = GLYPHS.map((g) => ({ name: g.name, d: glyphPath(g), eye: g.eye }));
-
-/** Sharp rectangle centered on (cx, cy). */
-const rect = (cx: number, cy: number, w: number, h: number) =>
-  `M${f(cx - w / 2)} ${f(cy - h / 2)}h${f(w)}v${f(h)}h${f(-w)}Z`;
-const pair = (x: number, y: number, k: number, dx: number, w: number, h: number, dy = 0): [string, string] => [
-  rect(x - dx * k, y + dy * k, w * k, h * k),
-  rect(x + dx * k, y + dy * k, w * k, h * k),
+/**
+ * Two V1 Tech heads felipe kept (Step, Twin cut), with sharp corners, scaled to sit at the same
+ * visual size as the glyph heads (their cores are 40 wide, the V1 heads 50).
+ */
+const V1_KEPT: { name: string; pts: V[]; eye: V }[] = [
+  { name: "Step", pts: [[19, 3], [53, 3], [53, 53], [3, 53], [3, 19], [19, 19]], eye: [28, 35] },
+  { name: "Twin cut", pts: [[17, 3], [53, 3], [53, 39], [39, 53], [3, 53], [3, 17]], eye: [28, 28] },
 ];
+const V1_SCALE = 0.86;
+const toGlyphSize = (p: V): V => [28 + (p[0] - 28) * V1_SCALE, 28 + (p[1] - 28) * V1_SCALE];
 
-/** Small eyes set close together: about a tenth of the head width, one eye apart. */
-export const GLYPH_EYES: BotAvatarEyes[] = [
-  { name: "Dots", h: 5, draw: (x, y, k) => pair(x, y, k, 5, 5, 5) },
-  { name: "Tiny", h: 3.8, draw: (x, y, k) => pair(x, y, k, 4.2, 3.8, 3.8) },
-  { name: "Wide", h: 5, draw: (x, y, k) => pair(x, y, k, 7.5, 5, 5) },
-  { name: "Slits", h: 2.4, draw: (x, y, k) => pair(x, y, k, 5.5, 6.5, 2.4) },
-  { name: "Bars", h: 7.5, draw: (x, y, k) => pair(x, y, k, 4.5, 3.2, 7.5) },
-  { name: "Lids", h: 3, draw: (x, y, k) => pair(x, y, k, 5.5, 6, 3, 1) },
-  {
-    name: "Glance",
-    h: 5,
-    draw: (x, y, k) => [rect(x - 2 * k, y, 5 * k, 5 * k), rect(x + 8 * k, y, 5 * k, 5 * k)],
-  },
-  {
-    // One eye, drawn as two halves that overlap by a hair so each side can still blink and turn.
-    name: "Mono",
-    h: 6,
-    draw: (x, y, k) => [rect(x - 1.9 * k, y, 4 * k, 6 * k), rect(x + 1.9 * k, y, 4 * k, 6 * k)],
-  },
+/**
+ * The final 12 heads (felipe, 2026-11-16), in stored order: the index is what gets saved.
+ * Eyes are the V1 Tech eyes, sharp (see `glyph` in bot-avatar.ts).
+ */
+export const GLYPH_SHAPES: BotAvatarShape[] = [
+  ...GLYPHS.map((g) => ({ name: g.name, d: glyphPath(g), eye: g.eye })),
+  ...V1_KEPT.map((v) => ({
+    name: v.name,
+    d: `${v.pts.map((p, i) => `${i ? "L" : "M"}${pt(toGlyphSize(p))}`).join("")}Z`,
+    eye: toGlyphSize(v.eye),
+  })),
 ];

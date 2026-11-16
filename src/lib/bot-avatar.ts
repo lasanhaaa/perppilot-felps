@@ -24,12 +24,13 @@ import {
   type GeoTweak,
 } from "./bot-avatar-geo";
 import { CHARACTER_FACES } from "./bot-avatar-character";
-import { GLYPH_EYES, GLYPH_SHAPES } from "./bot-avatar-glyph";
+import { GLYPH_SHAPES } from "./bot-avatar-glyph";
 
 /**
  * "character": the V1 Tech heads, flat, with personality (bot-avatar-character). "techflat": V1
- * Tech with only the rounding and the shadows removed. "glyph": new heads with notches, ears,
- * legs and bites, and small eyes (bot-avatar-glyph, exploration). v1 faces ("soft", "tech", kept as the
+ * Tech with only the rounding and the shadows removed. "glyph": THE FINAL FACES (2026-11-16), 12
+ * heads with notches, ears, legs and bites (bot-avatar-glyph) and the V1 Tech eyes, sharp and flat.
+ * v1 faces ("soft", "tech", kept as the
  * backup) and the round 2 treatments (see bot-avatar-geo).
  */
 export type BotAvatarStyle = "glyph" | "character" | "techflat" | "soft" | "tech" | GeoStyle;
@@ -185,7 +186,7 @@ const TECH_EYES = techEyes(0.5);
 const TECH_FLAT_EYES = techEyes(0);
 
 export const BOT_AVATAR_PARTS: Record<BotAvatarStyle, { shapes: BotAvatarShape[]; eyes: BotAvatarEyes[] }> = {
-  glyph: { shapes: GLYPH_SHAPES, eyes: GLYPH_EYES },
+  glyph: { shapes: GLYPH_SHAPES, eyes: TECH_FLAT_EYES },
   character: { shapes: CHARACTER_SHAPES, eyes: CHARACTER_FACES },
   techflat: { shapes: CHARACTER_SHAPES, eyes: TECH_FLAT_EYES },
   soft: { shapes: SOFT_SHAPES, eyes: SOFT_EYES },
@@ -230,7 +231,14 @@ export function botAvatarFromSeed(seed: number): BotAvatar {
  * Eye scale per style and face: tech cut-outs are 15% larger, visor eyes sit smaller inside the
  * visor, character faces are 25% larger so brows and mouths still read at 24 px.
  */
-const EYE_SCALE: Record<"soft" | "tech" | "visor" | "character", number> = { soft: 1, tech: 1.15, visor: 0.78, character: 1.25 };
+const EYE_SCALE: Record<"soft" | "tech" | "visor" | "character" | "glyph", number> = {
+  soft: 1,
+  tech: 1.15,
+  visor: 0.78,
+  character: 1.25,
+  // The V1 Tech eyes at the same eye-to-head ratio as on V1 (glyph cores are 40 wide, V1 heads 50).
+  glyph: 0.92,
+};
 
 const isGeo = (style: BotAvatarStyle): style is GeoStyle => (GEO_STYLES as readonly string[]).includes(style);
 
@@ -284,7 +292,7 @@ export function botAvatarParts(
   const k = visor
     ? EYE_SCALE.visor
     : glyph
-      ? tweak.eye
+      ? EYE_SCALE.glyph * tweak.eye
       : character
         ? EYE_SCALE.character * tweak.eye
       : style === "techflat"

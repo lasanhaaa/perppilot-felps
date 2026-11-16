@@ -10,29 +10,37 @@ The first version (7×7 pixel robots) was rejected by the client as too gamified
 ## Look
 
 - Three independent choices: body shape (12), eye style (8) and color (8) = 768 looks per style.
-- Two geometries share the same choices: **tech** (45° chamfers, square eyes; the default) and
-  **soft** (round corners). Tech has two faces: dark cut-out eyes, or body-colored eyes on a dark
-  visor. Which one ships is still open with the client.
+- Final (2026-11-16): the glyph heads with the V1 Tech eyes, see "Final faces" below. The other
+  styles stay on `/bot-styles` for reference.
+- Earlier geometries share the same choices: **tech** (45° chamfers, square eyes) and **soft**
+  (round corners). Tech had two faces: dark cut-out eyes, or body-colored eyes on a dark visor.
 - Colors: blue, mint, lime, lilac, white, pink, violet, sand. Never brand mint, success green,
   earnings green, red or amber: those mean status or money.
 - Layers: Body, Eye L, Eye R. Only the eyes ever move.
 - Sizes: 28 (lists), 54 / 56 (cards), 84+ (detail, editor preview).
 
-## Glyph heads and small eyes (exploration, 2026-11-14)
+## Final faces (2026-11-16)
 
-felipe: some heads are too basic (square, hexagon, diamond), some do not work (the slim round 2
-set), and the eyes are too big; reference: an agent mascot drawn as one flat silhouette with
-notches, ears, legs and bites, and two small square eyes set close together.
+felipe closed the face: the glyph heads he liked most, with the V1 Tech eyes. This is the default
+face everywhere (Bots overview cards, Bot Detail header, avatar editor, `/bot-motion`,
+`/bot-styles`), shown as **Final** in the Face switch.
 
-- Code: `src/lib/bot-avatar-glyph.ts`, style `glyph`, the default on `/bot-styles` for now.
-- One grammar for every head, so they read as a family: a core block, a corner treatment per
-  corner (square, cut, inner notch, concave scoop) and features per edge (V notch or point, slot
-  or tab, trapezoid tab, concave bite, convex bump). Corners stay sharp; bites and bumps are the
-  only curves.
-- 18 candidate heads to pick 12 from: Moth, Beetle, Owl, Crown, Spark, Gear, Walker, Plug,
-  Helmet, Ticket, Hourglass, Totem, Mantis, Badge, Lantern, Comet, Rune, Bolt.
-- 8 small eye sets (about a tenth of the head width, one eye apart): Dots, Tiny, Wide, Slits,
-  Bars, Lids, Glance, Mono. Flat, no shadows, same motion rig.
+- Code: `src/lib/bot-avatar-glyph.ts` (heads), style `glyph` in `src/lib/bot-avatar.ts`.
+- 12 heads, in stored order (the `shape` index is what gets saved): **Moth**, **Beetle**, **Owl**,
+  **Crown**, **Spark**, **Gear**, **Walker**, **Plug**, **Badge**, **Bolt**, plus two V1 Tech
+  heads, **Step** and **Twin cut**, with sharp corners, scaled by 0.86 to sit at the same visual
+  size as the glyph heads.
+- Eyes: the 8 V1 Tech eye sets, sharp (no rounding), at 0.92 of the face unit. That keeps the V1
+  eye-to-head ratio (glyph cores are 40 wide, V1 heads 50) and clears every notch and slot: all
+  96 head × eye pairs were checked.
+- Flat: no floor shadow, no dark side on turns. Same motion rig as every other face.
+- The head grammar: a core block, a corner treatment per corner (square, cut, inner notch,
+  concave scoop) and features per edge (V notch or point, slot or tab, trapezoid tab, concave
+  bite, convex bump). Corners stay sharp; bites and bumps are the only curves.
+- Dropped from the 18-head exploration (2026-11-14): Helmet, Ticket, Hourglass, Totem, Mantis,
+  Lantern, Comet, Rune, and its 8 small eye sets (Dots, Tiny, Wide, Slits, Bars, Lids, Glance, Mono).
+- Prototype: the Face switch choice is stored under `perppilot.bot-face.v2`, so earlier choices
+  start over on Final. The demo account's seeds give a varied cast (no head repeats in a row).
 
 ## Character (2026-11-14)
 
@@ -40,8 +48,8 @@ felipe's call after round 2: keep the V1 Tech silhouettes (the slimmer "Tech 2" 
 engraved details were rejected), keep them flat (no floor shadow, no dark side on turns), and give
 every bot a personality, while staying serious, geometric and tech. No colored eyes or mouths.
 
-- Code: `src/lib/bot-avatar-character.ts`, style `character`, the default face on `/bot-styles`
-  and in the product Face switch.
+- Code: `src/lib/bot-avatar-character.ts`, style `character` (was the default face on `/bot-styles`
+  and in the product Face switch until the Final faces).
 - Heads: the 12 V1 Tech outlines, with sharp corners by default (the "Corners" dial on
   `/bot-styles` brings back the V1 rounding).
 - Faces (the stored `eyes` index): **Stoic** (square eyes, flat brows), **Focused** (eye tops

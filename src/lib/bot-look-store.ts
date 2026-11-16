@@ -17,7 +17,8 @@ import type { Bot } from "./types";
  */
 
 const LOOKS_KEY = "perppilot.bot-looks";
-const FACE_KEY = "perppilot.bot-face";
+/** v2: the final faces (2026-11-16) became the default, so earlier switch choices start over. */
+const FACE_KEY = "perppilot.bot-face.v2";
 
 type Looks = Record<string, BotAvatar>;
 const EMPTY: Looks = {};
@@ -57,7 +58,7 @@ function readFace(): BotAvatarVariant {
   } catch {
     v = null;
   }
-  face = (BOT_AVATAR_VARIANTS as readonly string[]).includes(v ?? "") ? (v as BotAvatarVariant) : "character";
+  face = (BOT_AVATAR_VARIANTS as readonly string[]).includes(v ?? "") ? (v as BotAvatarVariant) : "glyph";
   return face;
 }
 
@@ -118,7 +119,7 @@ export function resetBotLook(id: string) {
 
 /** Face style chosen in the prototype panel (v1 Tech, Tech visor, Soft, or a round 2 style). */
 export function useBotFace(): BotAvatarVariant {
-  return useSyncExternalStore(subscribe, readFace, () => "character");
+  return useSyncExternalStore(subscribe, readFace, () => "glyph");
 }
 
 export function setBotFace(v: BotAvatarVariant) {

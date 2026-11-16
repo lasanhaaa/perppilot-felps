@@ -179,7 +179,7 @@ type Config = {
  */
 export function MotionAvatar({
   avatar,
-  variant = "tech",
+  variant = "glyph",
   state,
   size = 160,
   intensity = 1,

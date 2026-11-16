@@ -66,7 +66,7 @@ function CardRangePill({ status }: { status: Bot["rangeStatus"] }) {
 export function BotCard({
   bot,
   look,
-  variant = "tech",
+  variant = "glyph",
   motion,
   playKey = 0,
   phase,
