@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/cn";
+import { clearDraft } from "@/lib/draft";
 
 /**
  * Presenter controls, not part of the product: restart the flow as a brand-new user, or jump to
@@ -25,7 +26,7 @@ const SCREENS: [string, string][] = [
 
 export function PrototypeBar() {
   const [open, setOpen] = useState(false);
-  const { reset, jumpToRunning, state } = useStore();
+  const { reset, firstAccess, jumpToRunning, state } = useStore();
   const router = useRouter();
   const path = usePathname();
   const onBotDetail = /^\/bots\/[^/]+$/.test(path) && path !== "/bots/new";
@@ -47,6 +48,18 @@ export function PrototypeBar() {
               }}
             >
               Start over as a new user
+            </button>
+            <button
+              type="button"
+              className="t-b14 rounded-sm bg-raised px-3 py-2 text-left hover:bg-hover"
+              onClick={() => {
+                firstAccess();
+                clearDraft();
+                setOpen(false);
+                router.push("/overview");
+              }}
+            >
+              Back to first access
             </button>
             <button
               type="button"

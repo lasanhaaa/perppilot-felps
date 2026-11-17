@@ -20,7 +20,7 @@ Every bot has its own look (random at creation, editable) and moves: faces blink
 
 ## Prototype panel
 
-The **Prototype** button (bottom left) is for presenting, not part of the product: start over as a new user, jump straight to the platform with bots running, or open any screen. On Bot Detail it also triggers order fills, Out of range and Error, to show the bot motion. The Nado connect screen also has a small switch to show the wallet error states.
+The **Prototype** button (bottom left) is for presenting, not part of the product: start over as a new user, go back to first access (signed in, no exchange account, PIN or bot), jump straight to the platform with bots running, or open any screen. Opening `/reset` does the same as "Back to first access" and lands on the first-access Overview, so it works as a link to share. On Bot Detail it also triggers order fills, Out of range and Error, to show the bot motion. The Nado connect screen also has a small switch to show the wallet error states.
 
 ## Run it
 

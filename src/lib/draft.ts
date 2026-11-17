@@ -81,6 +81,13 @@ export function useDraft() {
   return { draft, update, clear, ready };
 }
 
+/** Drops the Create bot draft outside the flow (prototype resets). */
+export function clearDraft() {
+  try {
+    sessionStorage.removeItem(KEY);
+  } catch {}
+}
+
 /** Price range of a draft: from the preset in Simple, from the min/max steps in Advanced. */
 export function draftRange(d: Draft) {
   const price = COIN_PRICE[d.coin];

@@ -38,6 +38,8 @@ type Ctx = {
   ready: boolean;
   set: (patch: Partial<ProtoState> | ((s: ProtoState) => Partial<ProtoState>)) => void;
   reset: () => void;
+  /** Back to first access: still signed up, but no exchange account, PIN or bot yet. */
+  firstAccess: () => void;
   /** Jump to "platform with bots running" (presenter shortcut). */
   jumpToRunning: () => void;
   addAccount: (a: Account) => void;
@@ -82,6 +84,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ready,
       set,
       reset: () => setState(EMPTY),
+      firstAccess: () =>
+        setState((s) => ({
+          ...EMPTY,
+          signedUp: true,
+          email: s.email || "you@example.com",
+          name: s.name,
+          watchedLessons: s.watchedLessons,
+        })),
       jumpToRunning: () =>
         setState((s) => ({
           ...s,
