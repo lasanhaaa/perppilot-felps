@@ -1,44 +1,36 @@
-# PerpPilot platform preview
+# PerpPilot 2027 prototype
 
-A clickable front end of the PerpPilot platform, coded from the Figma file "Perp pilot" (page New Design). It is a live preview for testing design improvements, so all data is mocked and no request leaves the browser.
+Clickable prototype of the "New design 2027" Figma page: the first-access flow a new user goes through, from sign-up to a running bot, plus the platform once bots are running. It is a fresh Next.js app; nothing from the earlier preview is reused.
 
-## Stack
+All data is mocked. The app state lives in the browser (`localStorage`), so every visitor starts as a brand-new user.
 
-- Next.js 16 (App Router, Turbopack) and React 19
-- Tailwind CSS 4, tokens in `src/app/globals.css`
-- Fonts from `next/font/google`: Inter, Inter Tight (stands in for KMR Apparat, which is not on the web) and Geist Mono
-- English and German copy through a small context in `src/lib/i18n.tsx`
+## The flow
+
+1. **Sign up** `/signup` → verify email → 3 onboarding questions → welcome.
+2. **First-access Overview** `/overview`: setup checklist, onboarding course, example bots. Clicking an example opens "Want to use this bot?".
+3. **Setup your profile** `/setup`: choose an exchange, connect Nado with the browser wallet (or another exchange with keys), create the PIN.
+4. **Create bot** `/create-bot`: V3 Bot (account → Simple strategy presets or Advanced range → start with PIN) or PointBot (2 to 5 accounts → settings → start with PIN).
+5. **Running platform**: Overview with data, Bots, Bot Detail (Simple / Advanced, Change preset, Stop bot), Accounts, Explore Liquidity, Courses and the lesson player.
+
+When the first bot starts, the demo portfolio is added so the running platform has realistic data next to the new bot.
+
+## Bot faces
+
+Every bot has its own look (random at creation, editable) and moves: faces blink and hold still on cards, one bot at a time plays an order fill (a green + for P&L up, a red − for P&L down), and the Bot Detail face reacts to its status, stop and restart. Click the face on Bot Detail, or the pencil on the new bot while creating it, to open the avatar editor (shape, eyes, color, randomize). The motion engine and every state are described in `docs/bot-motion.md`.
+
+## Prototype panel
+
+The **Prototype** button (bottom left) is for presenting, not part of the product: start over as a new user, go back to first access (signed in, no exchange account, PIN or bot), jump straight to the platform with bots running, or open any screen. Opening `/reset` does the same as "Back to first access" and lands on the first-access Overview, so it works as a link to share. On Bot Detail it also triggers order fills, Out of range and Error, to show the bot motion. The Nado connect screen also has a small switch to show the wallet error states.
 
 ## Run it
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
-npm run lint
-npm run typecheck
-npm run build
+npm run dev
 ```
 
-Vercel picks the project up with the default Next.js settings; nothing needs configuring.
+Open http://localhost:3000. `npm run build` checks types and builds the app.
 
-## Routes
+## Stack
 
-| Route | Screen |
-| --- | --- |
-| `/login`, `/signup` | Sign in and sign up |
-| `/verify-email`, `/welcome`, `/connect-exchange`, `/create-pin` | Sign up flow |
-| `/onboarding` | Trader profile, 3 questions in German |
-| `/bots` | Bot overview with tabs, filters and grouped cards |
-| `/bots/[id]` | Bot detail with levels, stats and charts |
-| `/bots/new?type=v3` / `?type=pointbot` | Create bot, ends with the PIN modal |
-| `/accounts` | Exchange accounts and the add exchange modal |
-| `/course` | PerpPilot Fundamentals course |
-| `/settings` | Profile, language, PIN and notifications |
-
-## Where things live
-
-- `src/components/ui`: buttons, tags, fields, tabs, menus, modal
-- `src/components/shell`: sidebar, mobile header, banners, changelog tray, shared modals
-- `src/components/{bots,create-bot,accounts,course,auth,settings}`: one folder per area
-- `src/lib/mock-data.ts`: accounts, bots, changelog and course modules standing in for the API
-- `public/images`: raster art exported from Figma
+Next.js 16 (App Router), React 19, Tailwind CSS 4, Inter Tight via `next/font`. Design tokens and text styles are in `src/app/globals.css`, mock data in `src/lib/mock.ts`, app state in `src/lib/store.tsx`.
