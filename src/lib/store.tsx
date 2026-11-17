@@ -108,9 +108,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 
+/** The user's own items first, then the demo ones; a demo item the user edited keeps its place. */
 function mergeById<T extends { id: string }>(mine: T[], demo: T[]): T[] {
-  const ids = new Set(mine.map((x) => x.id));
-  return [...mine, ...demo.filter((x) => !ids.has(x.id))];
+  const demoIds = new Set(demo.map((x) => x.id));
+  const edits = new Map(mine.filter((x) => demoIds.has(x.id)).map((x) => [x.id, x]));
+  return [...mine.filter((x) => !demoIds.has(x.id)), ...demo.map((x) => edits.get(x.id) ?? x)];
 }
 
 export function useStore() {

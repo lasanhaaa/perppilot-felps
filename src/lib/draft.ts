@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COIN_PRICE, PRESETS, type Coin, type PresetId } from "./mock";
+import type { BotAvatar } from "./bot-avatar";
 
 /** The bot being created in the Create bot flow (kept in sessionStorage between steps). */
 export type Draft = {
@@ -23,6 +24,9 @@ export type Draft = {
   reduceLeverage: number;
   spread: "fee" | "near" | "half" | "custom";
   cloning: "none" | "slow" | "medium" | "fast";
+  /** The new bot's look: random when the flow starts (never from the pair), editable before Start. */
+  avatar?: BotAvatar;
+  avatarOriginal?: BotAvatar;
 };
 
 export const EMPTY_DRAFT: Draft = {
@@ -88,3 +92,8 @@ export function draftRange(d: Draft) {
 export const MARKETS: Coin[] = ["BTC", "ETH", "SOL", "HYPE", "XRP"];
 
 export const CREATE_STEPS = ["Bot", "Settings", "Start"];
+
+/** The new bot's look (a fixed default per type only for drafts from before looks existed). */
+export function draftLook(d: Draft): BotAvatar {
+  return d.avatar ?? (d.type === "v3" ? { shape: 9, eyes: 1, color: 0 } : { shape: 6, eyes: 0, color: 6 });
+}

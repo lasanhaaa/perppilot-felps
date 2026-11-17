@@ -14,9 +14,13 @@ All data is mocked. The app state lives in the browser (`localStorage`), so ever
 
 When the first bot starts, the demo portfolio is added so the running platform has realistic data next to the new bot.
 
+## Bot faces
+
+Every bot has its own look (random at creation, editable) and moves: faces blink and hold still on cards, one bot at a time plays an order fill (a green + for P&L up, a red − for P&L down), and the Bot Detail face reacts to its status, stop and restart. Click the face on Bot Detail, or the pencil on the new bot while creating it, to open the avatar editor (shape, eyes, color, randomize). The motion engine and every state are described in `docs/bot-motion.md`.
+
 ## Prototype panel
 
-The **Prototype** button (bottom left) is for presenting, not part of the product: start over as a new user, jump straight to the platform with bots running, or open any screen. The Nado connect screen also has a small switch to show the wallet error states.
+The **Prototype** button (bottom left) is for presenting, not part of the product: start over as a new user, jump straight to the platform with bots running, or open any screen. On Bot Detail it also triggers order fills, Out of range and Error, to show the bot motion. The Nado connect screen also has a small switch to show the wallet error states.
 
 ## Run it
 

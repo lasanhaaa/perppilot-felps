@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { SetupShell } from "@/components/shell/setup-shell";
-import { HeadingRow, SettingsCard, StepperCard } from "@/components/create/ui";
+import { DraftAvatar, HeadingRow, SettingsCard, StepperCard } from "@/components/create/ui";
 import { BotAvatar } from "@/components/ui/bot-avatar";
 import { EXCHANGES } from "@/components/ui/exchange-logo";
 import { Button } from "@/components/ui/primitives";
-import { CREATE_STEPS, useDraft, type Draft } from "@/lib/draft";
+import { CREATE_STEPS, draftLook, useDraft, type Draft } from "@/lib/draft";
 import { useStore } from "@/lib/store";
 
 const MARKET_SETS: { id: Draft["markets"]; title: string; description: string }[] = [
@@ -43,7 +43,7 @@ export default function PointSettingsPage() {
       <div className="flex w-[1152px] flex-col gap-6">
         <HeadingRow
           back="/create-bot/accounts"
-          avatar={<BotAvatar avatar={{ shape: 6, eyes: 0, color: 6 }} size={56} />}
+          avatar={<DraftAvatar look={draftLook(draft)} original={draft.avatarOriginal ?? draftLook(draft)} name={"PointBot"} onChange={(avatar) => update({ avatar })} />}
           title="Set up your PointBot"
           description={`Runs on ${picked.map((a) => `${a.name} · ${EXCHANGES[a.exchange].name}`).join(" and ")}. Choose the markets, size and spread.`}
         />

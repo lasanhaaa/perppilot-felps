@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { BOT_TYPE_LABEL, STATUS_LABEL, money, signedUsd, usd, type Bot, type BotStatus, type Coin } from "@/lib/mock";
-import { BotAvatar } from "@/components/ui/bot-avatar";
+import { MotionFace } from "@/components/bot-motion/motion-face";
+import type { MotionStateId } from "@/lib/bot-motion";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { botSeed, quietState } from "./bot-motion-state";
 import { CoinIcon } from "@/components/ui/coin";
 import { EXCHANGES, ExchangeGlyph, type ExchangeId } from "@/components/ui/exchange-logo";
 import { Icon } from "@/components/ui/icons";
@@ -69,11 +72,35 @@ export function PairLine({ coin, type, size = "md", className }: { coin: Coin; t
 
 /* ---------- Bot Card / Medium ---------- */
 
-export function BotCard({ bot, href, onClick, className }: { bot: Bot; href?: string; onClick?: () => void; className?: string }) {
+/** A bot's moving face on cards and rows: still and blinking, dozing when stopped, looks at you on hover. */
+export function BotFace({ bot, size, motion, playKey = 0, hovered = false }: { bot: Bot; size: number; motion?: MotionStateId; playKey?: number; hovered?: boolean }) {
+  const reduced = useReducedMotion();
+  const quiet = quietState(bot);
+  const state = motion && motion !== quiet ? motion : hovered && quiet === "still" ? "looking" : quiet;
+  return <MotionFace avatar={bot.avatar} state={state} playKey={playKey} seed={botSeed(bot.id)} paused={reduced} size={size} />;
+}
+
+export function BotCard({
+  bot,
+  href,
+  onClick,
+  className,
+  motion,
+  playKey,
+}: {
+  bot: Bot;
+  href?: string;
+  onClick?: () => void;
+  className?: string;
+  /** What the face does now (an order fill on the grid); quiet by default. */
+  motion?: MotionStateId;
+  playKey?: number;
+}) {
+  const [hovered, setHovered] = useState(false);
   const body = (
     <>
       <div className="flex h-[106px] items-center gap-4 border-b border-line px-5">
-        <BotAvatar avatar={bot.avatar} size={54} />
+        <BotFace bot={bot} size={54} motion={motion} playKey={playKey} hovered={hovered} />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-center gap-3">
             <PairLine coin={bot.coin} type={bot.type} size="lg" className="flex-1" />
@@ -112,14 +139,19 @@ export function BotCard({ bot, href, onClick, className }: { bot: Bot; href?: st
     </>
   );
   const cls = cn("flex flex-col rounded-sm border border-line bg-card text-left transition-colors hover:border-white/20 hover:bg-white/[0.035]", className);
+  const hover = {
+    "data-bot-id": bot.id,
+    onPointerEnter: (e: React.PointerEvent) => e.pointerType === "mouse" && setHovered(true),
+    onPointerLeave: () => setHovered(false),
+  };
   if (href)
     return (
-      <Link href={href} className={cls}>
+      <Link href={href} className={cls} {...hover}>
         {body}
       </Link>
     );
   return (
-    <button type="button" onClick={onClick} className={cls}>
+    <button type="button" onClick={onClick} className={cls} {...hover}>
       {body}
     </button>
   );
@@ -144,10 +176,16 @@ export function BotTableHeader() {
 }
 
 export function BotTableRow({ bot, last }: { bot: Bot; last?: boolean }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <Link href={`/bots/${bot.id}`} className={cn(BOT_COLS, "h-16 transition-colors hover:bg-white/[0.03]", !last && "border-b border-white/6")}>
+    <Link
+      href={`/bots/${bot.id}`}
+      onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      className={cn(BOT_COLS, "h-16 transition-colors hover:bg-white/[0.03]", !last && "border-b border-white/6")}
+    >
       <span className="flex items-center gap-3.5">
-        <BotAvatar avatar={bot.avatar} size={32} />
+        <BotFace bot={bot} size={32} hovered={hovered} />
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="t-b14 flex items-center gap-2 leading-[18px]">
             {bot.name}

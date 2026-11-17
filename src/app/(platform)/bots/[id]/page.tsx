@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useId, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/lib/store";
 import { PRESETS, money, priceFmt, series, signedUsd, usd, type Bot, type PresetId } from "@/lib/mock";
@@ -10,7 +10,11 @@ import { dayLabel, niceTicks } from "@/lib/overview-data";
 import { AreaChart } from "@/components/charts";
 import { RangeBar, ViewSwitch } from "@/components/create/ui";
 import { StatusPill } from "@/components/bots/bot-ui";
-import { BotAvatar } from "@/components/ui/bot-avatar";
+import { MotionFace } from "@/components/bot-motion/motion-face";
+import { BotAvatarEditor } from "@/components/bots/avatar-editor";
+import { botSeed, motionMs } from "@/components/bots/bot-motion-state";
+import type { MotionStateId } from "@/lib/bot-motion";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { CoinIcon } from "@/components/ui/coin";
 import { EXCHANGES } from "@/components/ui/exchange-logo";
 import { Icon } from "@/components/ui/icons";
@@ -85,6 +89,8 @@ function BotDetail() {
   const [view, setView] = useState<"simple" | "advanced">("simple");
   const [toast, setToast] = useState<ReactNode>(params.get("started") ? "Your bot is running. The first orders are on the exchange." : null);
   const [stopping, setStopping] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const motion = useDetailMotion(bot, !!params.get("started"));
 
   if (!bot)
     return (
@@ -92,6 +98,35 @@ function BotDetail() {
         <EmptyState icon="bot" title="Bot not found" description="This bot is not in this prototype session." action={<Button href="/bots">Back to bots</Button>} />
       </div>
     );
+
+  const face = (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      onPointerEnter={() => motion.setHovered(true)}
+      onPointerLeave={() => motion.setHovered(false)}
+      onFocus={() => motion.setHovered(true)}
+      onBlur={() => motion.setHovered(false)}
+      aria-label={`Edit ${bot.name} avatar`}
+      title="Edit avatar"
+      className="group relative flex-none rounded-sm outline-offset-4"
+    >
+      <MotionFace
+        avatar={bot.avatar}
+        state={motion.state}
+        size={48}
+        playKey={motion.playKey}
+        seed={botSeed(bot.id)}
+        paused={motion.paused}
+        followPointer
+        loop={false}
+        dir={bot.price > bot.max && bot.max > 0 ? -1 : 1}
+      />
+      <span className="absolute -right-2 -bottom-2 grid size-5 place-items-center rounded-sm border border-line bg-[#161d22] text-white/80 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+        <Icon name="pencil" size={12} />
+      </span>
+    </button>
+  );
 
   return (
     <div className="flex min-h-screen">
@@ -127,23 +162,158 @@ function BotDetail() {
           <AdvancedView bot={bot} />
         )}
       </div>
-      <BotSidebar bot={bot} onStop={() => setStopping(true)} onRestart={() => {
-        updateBot(bot.id, { status: "in-range" });
-        setToast("Bot restarted. New orders are on the exchange.");
-      }} />
+      <BotSidebar
+        bot={bot}
+        face={face}
+        phase={motion.phase}
+        liveTrades={motion.trades}
+        fresh={motion.fresh}
+        onStop={() => setStopping(true)}
+        onRestart={() =>
+          motion.restart(() => {
+            updateBot(bot.id, { status: "in-range" });
+            setToast("Bot restarted. New orders are on the exchange.");
+          })
+        }
+      />
       {stopping && (
         <StopModal
           bot={bot}
           onClose={() => setStopping(false)}
           onConfirm={() => {
-            updateBot(bot.id, { status: "stopped" });
             setStopping(false);
-            setToast("Bot stopped. Open orders were cancelled and your funds are back in the account.");
+            motion.stop(() => {
+              updateBot(bot.id, { status: "stopped" });
+              setToast("Bot stopped. Open orders were cancelled and your funds are back in the account.");
+            });
           }}
         />
       )}
+      {editing && <BotAvatarEditor bot={bot} onClose={() => setEditing(false)} onSaved={() => setToast("Avatar saved. Your bot shows the new look everywhere.")} />}
     </div>
   );
+}
+
+/**
+ * The Bot Detail face (docs/bot-motion.md): a one-shot first (new bot, order fill), then the
+ * lifecycle (starting, connecting, stopping), then the status (stopped, error, out of range),
+ * and idle otherwise. While the bot runs in range a fill lands every ~14 s with a new trade,
+ * mostly P&L up. The Prototype panel can trigger fills and status changes for a demo.
+ */
+function useDetailMotion(bot: Bot | undefined, isNew: boolean) {
+  const reduced = useReducedMotion();
+  const { updateBot } = useStore();
+  const [phase, setPhase] = useState<Phase | null>(null);
+  const [shot, setShot] = useState<{ id: MotionStateId; key: number } | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const [trades, setTrades] = useState<LiveTrade[]>([]);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const key = useRef(0);
+  const timers = useRef<number[]>([]);
+  const later = useCallback((ms: number, fn: () => void) => {
+    timers.current.push(window.setTimeout(fn, ms));
+  }, []);
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+
+  const play = useCallback(
+    (id: MotionStateId) => {
+      const k = ++key.current;
+      setShot({ id, key: k });
+      later(motionMs(id) + 120, () => setShot((s) => (s?.key === k ? null : s)));
+    },
+    [later],
+  );
+
+  // A bot that was just created pops out of the ground once.
+  useEffect(() => {
+    if (isNew) later(300, () => play("spawning"));
+  }, [isNew, later, play]);
+
+  const live = useRef(bot);
+  useEffect(() => {
+    live.current = bot;
+  }, [bot]);
+
+  const fill = useCallback(
+    (gain?: boolean) => {
+      const b = live.current;
+      if (!b || b.status === "stopped") return;
+      const up = gain ?? Math.random() < (b.netFees >= 0 ? 0.75 : 0.35);
+      const t: LiveTrade = {
+        id: `fill-${Date.now()}`,
+        side: Math.random() < 0.55 ? "Buy" : "Sell",
+        qty: (b.equity * 1.12) / b.price / 14,
+        price: b.price * (1 + (Math.random() - 0.5) * 0.004),
+        ago: "now",
+      };
+      setTrades((list) => [t, ...list.map((x) => ({ ...x, ago: x.ago === "now" ? "1m" : x.ago }))].slice(0, 6));
+      setFresh(t.id);
+      play(up ? "pnlUp" : "pnlDown");
+    },
+    [play],
+  );
+
+  const status = bot?.status;
+  useEffect(() => {
+    if (reduced || phase || status !== "in-range") return;
+    const t = window.setInterval(() => {
+      if (!document.hidden) fill();
+    }, 14000);
+    return () => window.clearInterval(t);
+  }, [reduced, phase, status, fill]);
+
+  // Prototype panel: trigger the rare moments on demand.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const b = live.current;
+      if (!b) return;
+      const kind = (e as CustomEvent<string>).detail;
+      if (kind === "fill-up") fill(true);
+      if (kind === "fill-down") fill(false);
+      if (kind === "out-of-range") updateBot(b.id, { status: b.status === "out-of-range" ? "in-range" : "out-of-range" });
+      if (kind === "error") updateBot(b.id, { status: b.status === "error" ? "in-range" : "error", issue: "Exchange keys expired" });
+    };
+    window.addEventListener("proto:bot-motion", on);
+    return () => window.removeEventListener("proto:bot-motion", on);
+  }, [fill, updateBot]);
+
+  const stop = (done: () => void) => {
+    setShot(null);
+    setPhase("stopping");
+    later(motionMs("stopping"), () => {
+      done();
+      setPhase(null);
+    });
+  };
+  const restart = (done: () => void) => {
+    setShot(null);
+    setPhase("starting");
+    later(motionMs("waking"), () => setPhase("connecting"));
+    later(motionMs("waking") + 2600, () => {
+      done();
+      setPhase(null);
+    });
+  };
+
+  const state: MotionStateId = shot
+    ? shot.id
+    : phase === "starting"
+      ? "waking"
+      : phase === "connecting"
+        ? "connecting"
+        : phase === "stopping"
+          ? "stopping"
+          : status === "stopped"
+            ? "sleeping"
+            : status === "error"
+              ? "alert"
+              : hovered
+                ? "looking"
+                : status === "out-of-range"
+                  ? "outOfRange"
+                  : "idle";
+
+  return { state, playKey: shot?.key ?? 0, paused: reduced, phase, trades, fresh, setHovered, stop, restart };
 }
 
 /* ================================================================== */
@@ -653,26 +823,45 @@ function EntryLineChart({ seed, entry }: { seed: number; entry: number }) {
 /* Right panel                                                          */
 /* ================================================================== */
 
-function BotSidebar({ bot, onStop, onRestart }: { bot: Bot; onStop: () => void; onRestart: () => void }) {
+type Phase = "stopping" | "starting" | "connecting";
+type LiveTrade = { id: string; side: "Buy" | "Sell"; qty: number; price: number; ago: string };
+
+function BotSidebar({
+  bot,
+  onStop,
+  onRestart,
+  face,
+  phase,
+  liveTrades,
+  fresh,
+}: {
+  bot: Bot;
+  onStop: () => void;
+  onRestart: () => void;
+  face: ReactNode;
+  phase: Phase | null;
+  liveTrades: LiveTrade[];
+  fresh: string | null;
+}) {
   const n = useBotNumbers(bot);
   const { allAccounts } = useStore();
   const exchanges = bot.accounts
     ? [...new Set(bot.accounts.map((name) => allAccounts.find((a) => a.name === name)?.exchange ?? bot.exchange))].map((e) => EXCHANGES[e].name).join(", ")
     : EXCHANGES[bot.exchange].name;
   const running = bot.status !== "stopped";
-  const runLabel = bot.status === "error" ? "Paused" : running ? "Running" : "Stopped";
+  const runLabel = phase ? { stopping: "Stopping", starting: "Starting", connecting: "Connecting" }[phase] : bot.status === "error" ? "Paused" : running ? "Running" : "Stopped";
   return (
     <aside className="sticky top-0 flex h-screen w-[336px] flex-none flex-col border-l border-line">
       <div className="flex flex-col gap-3.5 border-b border-line px-5 py-6">
         <div className="flex items-center gap-6">
-          <BotAvatar avatar={bot.avatar} size={48} />
+          {face}
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-3">
               {bot.type === "v3" && <CoinIcon coin={bot.coin} size={23} />}
               <span className="text-[24px] leading-[29px] font-semibold">{bot.name}</span>
             </span>
-            <span className={cn("flex items-center gap-1.5 text-[14px] leading-[17px] font-semibold uppercase", bot.status === "error" ? "text-error" : running ? "text-success" : "text-white/50")}>
-              <span className="size-1.5 rounded-full bg-current" />
+            <span className={cn("flex items-center gap-1.5 text-[14px] leading-[17px] font-semibold uppercase", phase ? "text-warning" : bot.status === "error" ? "text-error" : running ? "text-success" : "text-white/50")}>
+              <span className={cn("size-1.5 rounded-full bg-current", phase && "animate-pulse")} />
               {runLabel}
             </span>
           </div>
@@ -701,14 +890,14 @@ function BotSidebar({ bot, onStop, onRestart }: { bot: Bot; onStop: () => void; 
           </button>
         </div>
         <div className="no-scrollbar overflow-y-auto">
-          {(n.isNew ? n.trades.slice(0, 2) : n.trades).map((t, i) => (
-            <div key={i} className="flex h-[37px] items-center gap-3">
+          {[...liveTrades, ...(n.isNew ? n.trades.slice(0, 2).map((t, i) => ({ ...t, ago: ["2m", "6m"][i] })) : n.trades).map((t, i) => ({ ...t, id: `t${i}` }))].slice(0, 8).map((t) => (
+            <div key={t.id} className={cn("flex h-[37px] items-center gap-3", t.id === fresh && "anim-rise")}>
               <span className={cn("t-b14 w-12 px-1.5 text-center uppercase", t.side === "Buy" ? "bg-gain/10 text-gain" : "bg-error/10 text-error")}>{t.side}</span>
               <span className="t-b14 flex-1 text-white/80">
                 {t.qty.toFixed(5)} {bot.coin}
               </span>
               <span className="t-b14 tnum text-white/80">{priceFmt(t.price)}</span>
-              <span className="w-8 text-right text-[13px] text-white/40">{n.isNew ? ["2m", "6m"][i] : t.ago}</span>
+              <span className="w-8 text-right text-[13px] text-white/40">{t.ago}</span>
             </div>
           ))}
         </div>
@@ -719,11 +908,11 @@ function BotSidebar({ bot, onStop, onRestart }: { bot: Bot; onStop: () => void; 
           {running ? `${bot.runtime === "Just started" ? "Just started" : `${bot.runtime} running`}` : "Stopped"}
         </span>
         {running ? (
-          <Button variant="danger" className="h-12" iconLeft={<Icon name="square" size={20} />} onClick={onStop}>
+          <Button variant="danger" className="h-12" iconLeft={<Icon name="square" size={20} />} onClick={onStop} disabled={!!phase}>
             Stop bot
           </Button>
         ) : (
-          <Button className="h-12" iconLeft={<Icon name="play-solid" size={20} />} onClick={onRestart}>
+          <Button className="h-12" iconLeft={<Icon name="play-solid" size={20} />} onClick={onRestart} disabled={!!phase}>
             Restart bot
           </Button>
         )}

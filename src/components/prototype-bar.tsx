@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/cn";
@@ -27,6 +27,9 @@ export function PrototypeBar() {
   const [open, setOpen] = useState(false);
   const { reset, jumpToRunning, state } = useStore();
   const router = useRouter();
+  const path = usePathname();
+  const onBotDetail = /^\/bots\/[^/]+$/.test(path) && path !== "/bots/new";
+  const fire = (kind: string) => window.dispatchEvent(new CustomEvent("proto:bot-motion", { detail: kind }));
   const stage = state.portfolio ? "Bots running" : state.pin ? "Profile ready" : state.accounts.length ? "Exchange connected" : state.signedUp ? "New user" : "Signed out";
   return (
     <div className="fixed bottom-[92px] left-4 z-[60] flex flex-col items-start gap-2">
@@ -57,6 +60,24 @@ export function PrototypeBar() {
               Jump to: bots running
             </button>
           </div>
+          {onBotDetail && (
+            <>
+              <p className="t-l12 mt-4 text-white/40">Bot motion</p>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {[
+                  ["fill-up", "Fill · P&L up"],
+                  ["fill-down", "Fill · P&L down"],
+                  ["out-of-range", "Out of range"],
+                  ["error", "Error"],
+                ].map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => fire(k)} className="t-b14 rounded-sm bg-raised px-2.5 py-1.5 text-left hover:bg-hover">
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[12px] leading-4 text-white/40">Out of range and Error switch on and off. Stop and restart from the bot panel.</p>
+            </>
+          )}
           <p className="t-l12 mt-4 text-white/40">Screens</p>
           <div className="mt-2 grid grid-cols-2 gap-1">
             {SCREENS.map(([l, h]) => (

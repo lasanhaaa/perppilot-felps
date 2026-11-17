@@ -9,10 +9,10 @@ import { DAILY, DAILY_TRADES, PERIOD_CHANGE, dayLabel, dayLong, kFmt, metricSeri
 import { PageBody, PageHeader } from "@/components/shell/page-header";
 import { Button, ArrowRight, EmptyState, Segmented, TextLink } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
-import { BotAvatar } from "@/components/ui/bot-avatar";
 import { ExchangeLogo, EXCHANGES, type ExchangeId } from "@/components/ui/exchange-logo";
 import { AreaChart, BarChart, Donut } from "@/components/charts";
-import { BotCard, BotTableHeader, BotTableRow, ExchangeTag, PairLine, StatusPill } from "@/components/bots/bot-ui";
+import { BotCard, BotFace, BotTableHeader, BotTableRow, ExchangeTag, PairLine, StatusPill } from "@/components/bots/bot-ui";
+import { useGridMoments } from "@/components/bots/bot-motion-state";
 import { UseBotModal } from "@/components/bots/use-bot-modal";
 
 export default function OverviewPage() {
@@ -33,6 +33,7 @@ const EXAMPLES: Bot[] = [
 function FirstAccessOverview() {
   const { state } = useStore();
   const [example, setExample] = useState<Bot | null>(null);
+  const examples = useGridMoments(EXAMPLES);
   const hasAccount = state.accounts.length > 0;
   const watched = state.watchedLessons.length > 0;
   const steps = [
@@ -187,7 +188,7 @@ function FirstAccessOverview() {
         </div>
         <div className="grid grid-cols-3 gap-4">
           {EXAMPLES.map((b) => (
-            <BotCard key={b.id} bot={b} onClick={() => setExample(b)} />
+            <BotCard key={b.id} bot={b} onClick={() => setExample(b)} motion={examples.motionOf(b)} playKey={examples.keyOf(b)} />
           ))}
         </div>
       </PageBody>
@@ -249,6 +250,7 @@ function RunningOverview() {
   const attention = allBots.filter((b) => b.status === "error" || b.status === "out-of-range");
   const mine = allBots.filter((b) => b.mine);
   const top = [...mine, ...allBots.filter((b) => !b.mine).sort((a, b) => b.earned - a.earned)].slice(0, 5);
+  const grid = useGridMoments(view === "grid" ? top : []);
 
   const avg = DAILY.reduce((a, b) => a + b, 0) / DAILY.length;
   const best = Math.max(...DAILY);
@@ -480,7 +482,7 @@ function RunningOverview() {
               {attention.length === 0 && <p className="t-b14 p-5 text-white/50">All bots are running fine.</p>}
               {attention.map((b) => (
                 <div key={b.id} className="flex h-[78px] items-center gap-3 border-b border-white/6 px-5">
-                  <BotAvatar avatar={b.avatar} size={32} />
+                  <BotFace bot={b} size={32} />
                   <span className="flex min-w-0 flex-1 flex-col gap-2">
                     <PairLine coin={b.coin} type={b.type} />
                     <span className="flex items-center gap-2">
@@ -538,7 +540,7 @@ function RunningOverview() {
           ) : (
             <div className="grid grid-cols-3 gap-4 border-t border-line p-5">
               {top.map((b) => (
-                <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} />
+                <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} motion={grid.motionOf(b)} playKey={grid.keyOf(b)} />
               ))}
             </div>
           )}

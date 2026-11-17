@@ -8,6 +8,7 @@ import { BotAvatar } from "@/components/ui/bot-avatar";
 import { CREATE_STEPS, MARKETS, useDraft } from "@/lib/draft";
 import { useStore } from "@/lib/store";
 import { PRESETS, type Coin, type PresetId } from "@/lib/mock";
+import { freshLook } from "@/components/bots/bot-motion-state";
 
 /** Create bot · 1 Choose bot type (2103:8215). */
 export default function CreateBotPage() {
@@ -21,7 +22,7 @@ export default function CreateBotPage() {
 function ChooseType() {
   const router = useRouter();
   const params = useSearchParams();
-  const { ready, hasProfile } = useStore();
+  const { ready, hasProfile, allBots } = useStore();
   const { update, clear } = useDraft();
 
   const market = params.get("market") as Coin | null;
@@ -34,18 +35,22 @@ function ChooseType() {
     // Coming from Explore Liquidity: the bot type, market and preset are already chosen.
     if (typeParam === "v3") {
       clear();
+      const look = freshLook(allBots);
       update({
         type: "v3",
+        avatar: look,
+        avatarOriginal: look,
         ...(market && MARKETS.includes(market) ? { coin: market } : {}),
         ...(presetParam && presetParam in PRESETS ? { preset: presetParam } : {}),
       });
       router.replace("/create-bot/account");
     }
-  }, [ready, hasProfile, router, typeParam, market, presetParam, clear, update]);
+  }, [ready, hasProfile, router, typeParam, market, presetParam, clear, update, allBots]);
 
   const pick = (type: "v3" | "point") => {
     clear();
-    update({ type, ...(market && MARKETS.includes(market) ? { coin: market } : {}) });
+    const look = freshLook(allBots);
+    update({ type, avatar: look, avatarOriginal: look, ...(market && MARKETS.includes(market) ? { coin: market } : {}) });
     router.push(type === "v3" ? "/create-bot/account" : "/create-bot/accounts");
   };
 

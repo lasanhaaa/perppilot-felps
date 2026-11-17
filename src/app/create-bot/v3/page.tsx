@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { SetupShell } from "@/components/shell/setup-shell";
-import { CandleRange, HeadingRow, MarketSelect, PositionSize, RangeBar, SettingsCard, StepperCard, ViewSwitch } from "@/components/create/ui";
+import { CandleRange, DraftAvatar, HeadingRow, MarketSelect, PositionSize, RangeBar, SettingsCard, StepperCard, ViewSwitch } from "@/components/create/ui";
 import { BotAvatar } from "@/components/ui/bot-avatar";
 import { EXCHANGES } from "@/components/ui/exchange-logo";
 import { Button, TextLink } from "@/components/ui/primitives";
-import { CREATE_STEPS, draftRange, useDraft } from "@/lib/draft";
+import { CREATE_STEPS, draftLook, draftRange, useDraft } from "@/lib/draft";
 import { PRESETS, money, priceFmt, type PresetId } from "@/lib/mock";
 import { useStore } from "@/lib/store";
 
@@ -27,7 +27,7 @@ export default function V3SettingsPage() {
       <div className="flex w-[1152px] flex-col gap-6">
         <HeadingRow
           back="/create-bot/account"
-          avatar={<BotAvatar avatar={{ shape: 9, eyes: 1, color: 0 }} size={56} />}
+          avatar={<DraftAvatar look={draftLook(draft)} original={draft.avatarOriginal ?? draftLook(draft)} name={`${draft.coin}-USD`} onChange={(avatar) => update({ avatar })} />}
           title="Set up your V3 bot"
           description={advanced ? `${runsOn} Set the market, price range and position yourself.` : `${runsOn} Pick a market and a strategy, we set the range for you.`}
           right={

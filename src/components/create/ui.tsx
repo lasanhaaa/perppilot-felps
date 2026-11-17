@@ -7,6 +7,11 @@ import { MARKETS } from "@/lib/draft";
 import { CoinIcon } from "@/components/ui/coin";
 import { Icon } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/primitives";
+import { MotionFace } from "@/components/bot-motion/motion-face";
+import { AvatarEditor } from "@/components/bots/avatar-editor";
+import { useStore } from "@/lib/store";
+import { botAvatarSignature, type BotAvatar } from "@/lib/bot-avatar";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 /* ---------- Heading row: back button, optional avatar, title, right slot ---------- */
 
@@ -35,6 +40,55 @@ export function HeadingRow({
       </div>
       {right}
     </div>
+  );
+}
+
+/* ---------- The new bot's face: moves, and opens the avatar editor ---------- */
+
+export function DraftAvatar({
+  look,
+  original,
+  name,
+  size = 56,
+  onChange,
+  badge = true,
+}: {
+  look: BotAvatar;
+  original: BotAvatar;
+  name: string;
+  size?: number;
+  onChange: (look: BotAvatar) => void;
+  /** Show the pencil all the time (create flow), not only on hover. */
+  badge?: boolean;
+}) {
+  const { allBots } = useStore();
+  const reduced = useReducedMotion();
+  const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const taken = useMemo(() => new Set(allBots.map((b) => botAvatarSignature(b.avatar))), [allBots]);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        aria-label={`Edit ${name} avatar`}
+        title="Edit avatar"
+        className="group relative flex-none rounded-sm outline-offset-4"
+      >
+        <MotionFace avatar={look} state={hovered ? "looking" : "idle"} size={size} seed={7} paused={reduced} followPointer />
+        <span
+          className={cn(
+            "absolute -right-2 -bottom-2 grid size-5 place-items-center rounded-sm border border-line bg-[#161d22] text-white/80 transition-opacity",
+            badge ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+        >
+          <Icon name="pencil" size={12} />
+        </span>
+      </button>
+      {open && <AvatarEditor name={name} avatar={look} original={original} seed={7} taken={taken} onSave={onChange} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

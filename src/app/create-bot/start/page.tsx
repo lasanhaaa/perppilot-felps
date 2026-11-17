@@ -8,7 +8,8 @@ import { BotAvatar } from "@/components/ui/bot-avatar";
 import { ExchangeLogo, EXCHANGES } from "@/components/ui/exchange-logo";
 import { Icon } from "@/components/ui/icons";
 import { Button, Notice, PinInput } from "@/components/ui/primitives";
-import { CREATE_STEPS, draftRange, useDraft } from "@/lib/draft";
+import { CREATE_STEPS, draftLook, draftRange, useDraft } from "@/lib/draft";
+import { DraftAvatar } from "@/components/create/ui";
 import { PRESETS, money, priceFmt, series, type Bot } from "@/lib/mock";
 import { useStore } from "@/lib/store";
 
@@ -16,7 +17,7 @@ import { useStore } from "@/lib/store";
 export default function StartBotPage() {
   const router = useRouter();
   const { allAccounts, addBot } = useStore();
-  const { draft, clear, ready } = useDraft();
+  const { draft, clear, ready, update } = useDraft();
   const [pin, setPin] = useState("");
   const [starting, setStarting] = useState(false);
   if (!ready) return null;
@@ -25,7 +26,10 @@ export default function StartBotPage() {
   const account = allAccounts.find((a) => a.id === draft.account) ?? allAccounts[0];
   const picked = allAccounts.filter((a) => draft.accounts.includes(a.id));
   const range = draftRange(draft);
-  const avatar = isV3 ? { shape: 9, eyes: 1, color: 0 } : { shape: 6, eyes: 0, color: 6 };
+  const avatar = draftLook(draft);
+  const face = (
+    <DraftAvatar look={avatar} original={draft.avatarOriginal ?? avatar} name={isV3 ? `${draft.coin}-USD` : "PointBot"} size={32} badge={false} onChange={(look) => update({ avatar: look })} />
+  );
   const presetLabel = draft.mode === "simple" ? PRESETS[draft.preset].name : "Custom range";
   const marketsLabel = { top20: "Top 20 Crypto", top30: "Top 30 incl. RWA", all: "All matched" }[draft.markets];
 
@@ -43,7 +47,7 @@ export default function StartBotPage() {
       exchange: isV3 ? account.exchange : picked[0]?.exchange ?? "extended",
       account: isV3 ? account.name : picked[0]?.name ?? "",
       accounts: isV3 ? undefined : picked.map((a) => a.name),
-      avatar: { ...avatar, shape: Math.floor(Math.random() * 10) },
+      avatar,
       status: "in-range",
       preset: draft.preset,
       equity: isV3 ? draft.positionSize : draft.perMarket * picked.length,
@@ -80,7 +84,7 @@ export default function StartBotPage() {
           {isV3 ? (
             <>
               <SummaryRow
-                icon={<BotAvatar avatar={avatar} size={32} />}
+                icon={face}
                 title={`V3 Bot · ${draft.coin}-USD`}
                 meta="Bot"
                 status={presetLabel}
@@ -95,7 +99,7 @@ export default function StartBotPage() {
             </>
           ) : (
             <>
-              <SummaryRow icon={<BotAvatar avatar={avatar} size={32} />} title={`PointBot · ${marketsLabel}`} meta="Bot" status={`${draft.leverage}x`} />
+              <SummaryRow icon={face} title={`PointBot · ${marketsLabel}`} meta="Bot" status={`${draft.leverage}x`} />
               <SummaryRow
                 icon={
                   <span className="flex">

@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ArrowRight, Button, Dropdown, EmptyState } from "@/components/ui/primitives";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { BotCard } from "@/components/bots/bot-ui";
+import { useGridMoments } from "@/components/bots/bot-motion-state";
 
 type Tab = "active" | "error" | "stopped";
 type TypeFilter = "all" | "v3" | "point";
@@ -25,6 +26,16 @@ export default function BotsPage() {
   const [tab, setTab] = useState<Tab>("active");
   const [type, setType] = useState<TypeFilter>("all");
   const [sort, setSort] = useState<Sort>("newest");
+  const tabDef = TABS.find((t) => t.id === tab)!;
+  const sorted = (list: Bot[]) =>
+    [...list].sort((a, b) => {
+      if (a.mine !== b.mine) return a.mine ? -1 : 1;
+      if (sort === "earned") return b.earned - a.earned;
+      if (sort === "apr") return b.apr - a.apr;
+      return 0;
+    });
+  const visible = sorted(allBots.filter(tabDef.match));
+  const grid = useGridMoments(visible);
 
   if (allBots.length === 0)
     return (
@@ -50,15 +61,6 @@ export default function BotsPage() {
       </>
     );
 
-  const tabDef = TABS.find((t) => t.id === tab)!;
-  const sorted = (list: Bot[]) =>
-    [...list].sort((a, b) => {
-      if (a.mine !== b.mine) return a.mine ? -1 : 1;
-      if (sort === "earned") return b.earned - a.earned;
-      if (sort === "apr") return b.apr - a.apr;
-      return 0;
-    });
-  const visible = sorted(allBots.filter(tabDef.match));
   const sections = [
     { id: "v3" as const, title: "V3 Bots", tag: "[long biased liquidity]", bots: visible.filter((b) => b.type === "v3") },
     { id: "point" as const, title: "Points Bots", tag: "[cross-exchange arbitrage]", bots: visible.filter((b) => b.type === "point") },
@@ -137,7 +139,7 @@ export default function BotsPage() {
             {s.bots.length ? (
               <div className="grid grid-cols-3 gap-4 px-14">
                 {s.bots.map((b) => (
-                  <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} />
+                  <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} motion={grid.motionOf(b)} playKey={grid.keyOf(b)} />
                 ))}
               </div>
             ) : (

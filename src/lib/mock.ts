@@ -26,6 +26,8 @@ export type Bot = {
   /** For PointBots: every account it trades on. */
   accounts?: string[];
   avatar: BotAvatar;
+  /** The look the bot got at creation, kept once the user edits it ("Reset to original"). */
+  avatarOriginal?: BotAvatar;
   status: BotStatus;
   /** Short reason shown in Needs attention. */
   issue?: string;
