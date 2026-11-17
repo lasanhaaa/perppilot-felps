@@ -22,12 +22,13 @@ export default function CreateBotPage() {
 function ChooseType() {
   const router = useRouter();
   const params = useSearchParams();
-  const { ready, hasProfile, allBots } = useStore();
+  const { ready, hasProfile, allBots, allAccounts } = useStore();
   const { update, clear } = useDraft();
 
   const market = params.get("market") as Coin | null;
   const presetParam = params.get("preset") as PresetId | null;
   const typeParam = params.get("type");
+  const exchangeParam = params.get("exchange");
 
   useEffect(() => {
     if (!ready) return;
@@ -36,16 +37,19 @@ function ChooseType() {
     if (typeParam === "v3") {
       clear();
       const look = freshLook(allBots);
+      // An exchange row in Explore picks the account too, when the user has one there.
+      const account = exchangeParam ? allAccounts.find((a) => a.exchange === exchangeParam) : undefined;
       update({
         type: "v3",
         avatar: look,
         avatarOriginal: look,
         ...(market && MARKETS.includes(market) ? { coin: market } : {}),
         ...(presetParam && presetParam in PRESETS ? { preset: presetParam } : {}),
+        ...(account ? { account: account.id } : {}),
       });
-      router.replace("/create-bot/account");
+      router.replace(account ? "/create-bot/v3" : "/create-bot/account");
     }
-  }, [ready, hasProfile, router, typeParam, market, presetParam, clear, update, allBots]);
+  }, [ready, hasProfile, router, typeParam, market, presetParam, exchangeParam, clear, update, allBots, allAccounts]);
 
   const pick = (type: "v3" | "point") => {
     clear();
