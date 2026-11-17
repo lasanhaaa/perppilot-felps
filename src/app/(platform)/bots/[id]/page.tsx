@@ -91,6 +91,9 @@ function BotDetail() {
   const [stopping, setStopping] = useState(false);
   const [editing, setEditing] = useState(false);
   const motion = useDetailMotion(bot, !!params.get("started"));
+  // Explore Liquidity "Apply <preset>" lands here with ?preset=, opening Change preset with it picked.
+  const presetParam = params.get("preset");
+  const suggest = presetParam && presetParam in PRESETS ? (presetParam as PresetId) : undefined;
 
   if (!bot)
     return (
@@ -157,7 +160,12 @@ function BotDetail() {
           </Notice>
         )}
         {view === "simple" ? (
-          <SimpleView bot={bot} onApplied={(p) => setToast(`Preset changed to ${PRESETS[p].name}. The bot placed a new grid around the current price.`)} updateBot={updateBot} />
+          <SimpleView
+            bot={bot}
+            suggest={suggest}
+            onApplied={(p) => setToast(`Preset changed to ${PRESETS[p].name}. The bot placed a new grid around the current price.`)}
+            updateBot={updateBot}
+          />
         ) : (
           <AdvancedView bot={bot} />
         )}
@@ -320,7 +328,17 @@ function useDetailMotion(bot: Bot | undefined, isNew: boolean) {
 /* Simple                                                               */
 /* ================================================================== */
 
-function SimpleView({ bot, onApplied, updateBot }: { bot: Bot; onApplied: (p: PresetId) => void; updateBot: (id: string, patch: Partial<Bot>) => void }) {
+function SimpleView({
+  bot,
+  suggest,
+  onApplied,
+  updateBot,
+}: {
+  bot: Bot;
+  suggest?: PresetId;
+  onApplied: (p: PresetId) => void;
+  updateBot: (id: string, patch: Partial<Bot>) => void;
+}) {
   const n = useBotNumbers(bot);
   const [period, setPeriod] = useState<"1D" | "7D" | "30D" | "All">("All");
   const values = period === "All" || n.earnings.length <= 2 ? n.earnings : n.earnings.slice(-Math.min(n.earnings.length, { "1D": 2, "7D": 8, "30D": 31 }[period]));
@@ -344,7 +362,7 @@ function SimpleView({ bot, onApplied, updateBot }: { bot: Bot; onApplied: (p: Pr
         <PointMarketsCard bot={bot} />
       )}
 
-      {bot.type === "v3" && <PresetCard bot={bot} onApplied={onApplied} updateBot={updateBot} />}
+      {bot.type === "v3" && <PresetCard bot={bot} suggest={suggest} onApplied={onApplied} updateBot={updateBot} />}
 
       <div className="grid grid-cols-4 gap-3.5">
         {n.isNew ? (
@@ -426,10 +444,30 @@ function SimpleView({ bot, onApplied, updateBot }: { bot: Bot; onApplied: (p: Pr
   );
 }
 
-/** Strategy preset card: current preset + Change preset (the compact preset tabs were removed on felipe's request). */
-function PresetCard({ bot, onApplied, updateBot }: { bot: Bot; onApplied: (p: PresetId) => void; updateBot: (id: string, patch: Partial<Bot>) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [pick, setPick] = useState<PresetId>(bot.preset);
+/**
+ * Strategy preset card: current preset + Change preset (the compact preset tabs were removed on felipe's request).
+ * `suggest` (from Explore Liquidity's Apply) opens Change preset with that preset picked and tagged Suggested.
+ */
+function PresetCard({
+  bot,
+  suggest,
+  onApplied,
+  updateBot,
+}: {
+  bot: Bot;
+  suggest?: PresetId;
+  onApplied: (p: PresetId) => void;
+  updateBot: (id: string, patch: Partial<Bot>) => void;
+}) {
+  const fromExplore = !!suggest && suggest !== bot.preset;
+  const [editing, setEditing] = useState(fromExplore);
+  const [pick, setPick] = useState<PresetId>(fromExplore ? suggest : bot.preset);
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // Only on arrival from Explore.
+    if (fromExplore) ref.current?.scrollIntoView({ block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const current = PRESETS[bot.preset];
   const next = PRESETS[pick];
   const n = useBotNumbers(bot);
@@ -464,11 +502,12 @@ function PresetCard({ bot, onApplied, updateBot }: { bot: Bot; onApplied: (p: Pr
     );
 
   return (
-    <section className="anim-fade flex flex-col gap-5 rounded-sm border border-line bg-card p-6">
+    <section ref={ref} className="anim-fade flex flex-col gap-5 rounded-sm border border-line bg-card p-6">
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
           <span className="t-l12 text-white/30">Strategy preset</span>
           <span className="text-[20px] leading-[26px] font-medium">Change preset</span>
+          {fromExplore && suggest && <span className="t-b14 text-white/60">Explore Liquidity suggests {PRESETS[suggest].name} for {bot.coin}-USD right now.</span>}
         </div>
         <TextLink icon={null} onClick={() => setEditing(false)}>
           Cancel
@@ -483,6 +522,7 @@ function PresetCard({ bot, onApplied, updateBot }: { bot: Bot; onApplied: (p: Pr
               <span className="flex h-[27px] items-center gap-2">
                 <span className={cn("text-[18px] leading-[27px] font-medium", on ? "text-white" : "text-white/60")}>{p.name}</span>
                 {id === bot.preset && <span className="t-l12 border border-line px-1.5 py-0.5 text-white/60">Current</span>}
+                {id === suggest && id !== bot.preset && <span className="t-l12 border border-line px-1.5 py-0.5 text-white/60">Suggested</span>}
               </span>
               <span className={cn("t-b16", on ? "text-white/60" : "text-white/30")}>{p.description}</span>
               <span className="flex gap-3">

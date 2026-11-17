@@ -28,14 +28,15 @@ export function Button({
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonStyle;
-  size?: "md" | "sm";
+  /** md 55px, sm 40px, xs 32px ("Button small" 2142:8347, used in row hover actions). */
+  size?: "md" | "sm" | "xs";
   iconLeft?: ReactNode;
   iconRight?: ReactNode;
   href?: string;
 }) {
   const cls = cn(
     "inline-flex items-center justify-center gap-2 rounded-sm transition-colors select-none whitespace-nowrap",
-    variant === "ghost" ? "t-b16 p-1" : size === "md" ? "t-btn16 h-[55px] px-6" : "t-btn14 uppercase font-semibold h-10 px-4",
+    variant === "ghost" ? "t-b16 p-1" : size === "md" ? "t-btn16 h-[55px] px-6" : size === "sm" ? "t-btn14 uppercase font-semibold h-10 px-4" : "t-btn14 h-8 px-3",
     BTN[variant],
     className,
   );
