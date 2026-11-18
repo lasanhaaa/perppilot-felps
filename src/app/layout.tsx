@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter_Tight } from "next/font/google";
 import { StoreProvider } from "@/lib/store";
 import { PrototypeBar } from "@/components/prototype-bar";
+import { LinesStage } from "@/components/auth/lines-stage";
 import "./globals.css";
 
 const interTight = Inter_Tight({
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={interTight.variable}>
       <body>
         <StoreProvider>
-          {children}
+          <LinesStage>{children}</LinesStage>
           <PrototypeBar />
         </StoreProvider>
       </body>

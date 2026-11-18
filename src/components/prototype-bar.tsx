@@ -13,7 +13,11 @@ import { clearDraft } from "@/lib/draft";
  */
 const SCREENS: [string, string][] = [
   ["Login", "/login"],
+  ["Forgot password", "/forgot-password"],
   ["Sign up", "/signup"],
+  ["Verify e-mail", "/verify-email"],
+  ["First questions", "/onboarding"],
+  ["Welcome", "/welcome"],
   ["Overview", "/overview"],
   ["Setup your profile", "/setup"],
   ["Create bot", "/create-bot"],
@@ -33,7 +37,7 @@ export function PrototypeBar() {
   const fire = (kind: string) => window.dispatchEvent(new CustomEvent("proto:bot-motion", { detail: kind }));
   const stage = state.portfolio ? "Bots running" : state.pin ? "Profile ready" : state.accounts.length ? "Exchange connected" : state.signedUp ? "New user" : "Signed out";
   return (
-    <div className="fixed bottom-[92px] left-4 z-[60] flex flex-col items-start gap-2">
+    <div data-cursor-auto className="fixed bottom-[92px] left-4 z-[60] flex flex-col items-start gap-2">
       {open && (
         <div className="anim-rise w-[260px] rounded-sm border border-line bg-[#0e1215] p-3 shadow-2xl shadow-black/60">
           <p className="t-l12 text-white/40">Prototype · {stage}</p>
