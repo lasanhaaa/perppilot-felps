@@ -289,22 +289,46 @@
   --by: 10px;
 }
 
-/* Crosshair ring turns mint and shrinks while the mouse is pressed. */
-.crosshair-ring {
+/* Crosshair: the icon replaces the mouse pointer on the auth screens (I-beam inside fields). */
+.lines-cursor body,
+.lines-cursor button,
+.lines-cursor a,
+.lines-cursor label {
+  cursor: none;
+}
+.lines-cursor input,
+.lines-cursor textarea {
+  cursor: text;
+}
+.lines-cursor [data-cursor-auto],
+.lines-cursor [data-cursor-auto] * {
+  cursor: auto;
+}
+.crosshair-icon {
+  color: rgb(255 255 255 / 0.9);
   transition:
-    border-color 150ms ease,
-    opacity 200ms ease;
+    opacity 150ms ease,
+    color 150ms ease;
   will-change: transform;
 }
-.crosshair-tag {
-  transition: opacity 200ms ease;
+.crosshair-label {
+  transition: opacity 150ms ease;
 }
-.crosshair-over .crosshair-ring,
-.crosshair-over .crosshair-tag {
-  opacity: 0;
+.crosshair-brackets {
+  color: rgb(255 255 255 / 0.75);
+  transition: color 150ms ease;
+  will-change: transform, width, height;
 }
-.crosshair-ring.is-down {
-  border-color: var(--color-brand);
+.crosshair-down .crosshair-icon,
+.crosshair-down .crosshair-brackets {
+  color: var(--color-brand);
+}
+.crosshair-typing .crosshair-icon,
+.crosshair-typing .crosshair-label,
+.crosshair-hidden .crosshair-icon,
+.crosshair-hidden .crosshair-label,
+.crosshair-hidden .crosshair-brackets {
+  opacity: 0 !important;
 }
 
 /* First questions: steps slide in the direction you move, the progress segment fills in. */
@@ -344,6 +368,39 @@
 .tile-in {
   animation: tile-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   animation-delay: calc(var(--i, 0) * 35ms + 80ms);
+}
+
+/* Login / welcome → platform handoff: the platform waits under the lines, then builds in. */
+.platform-cover > aside,
+.platform-cover > main {
+  opacity: 0;
+}
+@keyframes enter-sidebar {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes enter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+.platform-reveal > aside {
+  animation: enter-sidebar 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms both;
+}
+.platform-reveal > main > * {
+  animation: enter-rise 800ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.platform-reveal > main > :nth-child(1) {
+  animation-delay: 160ms;
+}
+.platform-reveal > main > :nth-child(2) {
+  animation-delay: 280ms;
+}
+.platform-reveal > main > :nth-child(n + 3) {
+  animation-delay: 380ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3,57 +3,90 @@
 import { useEffect, useRef } from "react";
 
 /**
- * "Cursor / Crosshair" (Figma 2247:4403): full-viewport hairlines that follow the mouse, a ring,
- * a live X / Y tag and mint marks on the rulers. Sits under the panel, so it never crosses the
- * form. Mouse and pen only; touch screens don't get it.
+ * "Cursor / Crosshair" (Figma 2247:4403), in the Nado style.
+ *
+ * - A small crosshair icon with a diamond replaces the mouse pointer on the auth screens. It
+ *   follows with a little lag, which makes the movement feel soft.
+ * - Faint full-viewport hairlines stop short of it (they never meet at the cursor) and pass over
+ *   everything, the panel included.
+ * - The coordinates sit next to it as plain text, no box. Mint marks follow it on the rulers.
+ * - Hovering a button, link or field: four brackets fly out from the cursor and lock onto it, as if
+ *   selecting it. Pressing tightens them and turns them mint. Leaving collapses them back into the
+ *   cursor as small squares.
+ * - Inside a text field the normal I-beam comes back so typing feels normal.
+ * Mouse and pen only.
  */
+const GAP = 14; // px the hairlines stop short of the cursor
+const PAD = 7; // px between a hovered element and its brackets
+
+type Box = { x: number; y: number; w: number; h: number };
+
+function targetOf(el: Element | null): Element | null {
+  if (!el || el.closest("[data-cursor-auto]")) return null;
+  const hit = el.closest("button, a, input, textarea, select, [role=button], [data-target]");
+  if (!hit) return null;
+  // A field's visible box is the bordered wrapper around the input.
+  if (hit.matches("input, textarea, select")) return hit.parentElement ?? hit;
+  return hit;
+}
+
 export function Crosshair({ reduced }: { reduced: boolean }) {
   const root = useRef<HTMLDivElement>(null);
-  const v = useRef<HTMLDivElement>(null);
-  const h = useRef<HTMLDivElement>(null);
-  const ring = useRef<HTMLDivElement>(null);
-  const tag = useRef<HTMLDivElement>(null);
+  const vTop = useRef<HTMLDivElement>(null);
+  const vBottom = useRef<HTMLDivElement>(null);
+  const hLeft = useRef<HTMLDivElement>(null);
+  const hRight = useRef<HTMLDivElement>(null);
+  const icon = useRef<HTMLDivElement>(null);
   const label = useRef<HTMLSpanElement>(null);
   const markX = useRef<HTMLDivElement>(null);
   const markY = useRef<HTMLDivElement>(null);
+  const brackets = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = root.current;
     if (!el || !window.matchMedia("(pointer: fine)").matches) return;
-    const target = { x: 0, y: 0 };
-    const line = { x: 0, y: 0 };
-    const tagPos = { x: 0, y: 0 };
+    document.documentElement.classList.add("lines-cursor");
+    const mouse = { x: 0, y: 0 };
+    const pos = { x: 0, y: 0 }; // icon
+    const line = { x: 0, y: 0 }; // hairlines, a touch slower
+    let target: Element | null = null;
+    let typing = false;
     let inside = false;
     let down = false;
     let scale = 1;
     let shown = "";
+    const box: Box = { x: 0, y: 0, w: 0, h: 0 };
+    let boxOpacity = 0;
 
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
-      target.x = e.clientX;
-      target.y = e.clientY;
-      // Over the panel the lines already hide behind it; the ring and tag fade out too.
-      const over = e.target instanceof Element && !!e.target.closest("[data-lines-panel]");
-      el.classList.toggle("crosshair-over", over);
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+      const t = e.target instanceof Element ? e.target : null;
+      target = targetOf(t);
+      typing = !!t?.closest("input, textarea, select");
+      el.classList.toggle("crosshair-typing", typing);
+      el.classList.toggle("crosshair-hidden", !!t?.closest("[data-cursor-auto]"));
       if (!inside) {
         inside = true;
-        line.x = tagPos.x = target.x;
-        line.y = tagPos.y = target.y;
+        pos.x = line.x = box.x = mouse.x;
+        pos.y = line.y = box.y = mouse.y;
         el.style.opacity = "1";
       }
     };
     const onOut = (e: MouseEvent) => {
       if (e.relatedTarget) return;
       inside = false;
+      target = null;
       el.style.opacity = "0";
     };
     const onDown = () => {
       down = true;
-      ring.current?.classList.add("is-down");
+      el.classList.add("crosshair-down");
     };
     const onUp = () => {
       down = false;
-      ring.current?.classList.remove("is-down");
+      el.classList.remove("crosshair-down");
     };
     window.addEventListener("pointermove", onMove, { passive: true });
     document.addEventListener("mouseout", onOut);
@@ -66,41 +99,79 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const ease = (k: number) => (reduced ? 1 : 1 - Math.pow(1 - k, dt * 60));
-      const kl = ease(0.35);
-      const kt = ease(0.2);
-      line.x += (target.x - line.x) * kl;
-      line.y += (target.y - line.y) * kl;
-      tagPos.x += (target.x - tagPos.x) * kt;
-      tagPos.y += (target.y - tagPos.y) * kt;
-      scale += ((down ? 0.55 : 1) - scale) * ease(0.3);
+      const ki = ease(0.3);
+      const kl = ease(0.2);
+      pos.x += (mouse.x - pos.x) * ki;
+      pos.y += (mouse.y - pos.y) * ki;
+      line.x += (mouse.x - line.x) * kl;
+      line.y += (mouse.y - line.y) * kl;
+      scale += ((down ? 0.7 : 1) - scale) * ease(0.3);
+      const W = window.innerWidth;
+      const H = window.innerHeight;
 
-      const x = Math.round(line.x);
-      const y = Math.round(line.y);
-      if (v.current) v.current.style.transform = `translate3d(${x}px,0,0)`;
-      if (h.current) h.current.style.transform = `translate3d(0,${y}px,0)`;
-      if (markX.current) markX.current.style.transform = `translate3d(${x}px,0,0)`;
-      if (markY.current) markY.current.style.transform = `translate3d(0,${y}px,0)`;
-      if (ring.current) ring.current.style.transform = `translate3d(${line.x - 10}px,${line.y - 10}px,0) scale(${scale})`;
-
-      const text = `X ${Math.round(target.x)} · Y ${Math.round(target.y)}`;
-      if (text !== shown && label.current) {
-        label.current.textContent = text;
-        shown = text;
+      // Hairlines with a gap around the cursor.
+      const lx = Math.round(line.x);
+      const ly = Math.round(line.y);
+      if (vTop.current) {
+        vTop.current.style.transform = `translate3d(${lx}px,0,0)`;
+        vTop.current.style.height = `${Math.max(0, ly - GAP)}px`;
       }
-      if (tag.current) {
-        const tw = tag.current.offsetWidth;
-        const th = tag.current.offsetHeight;
-        let tx = tagPos.x + 22;
-        let ty = tagPos.y + 28;
-        if (tx + tw > window.innerWidth - 12) tx = tagPos.x - 22 - tw;
-        if (ty + th > window.innerHeight - 12) ty = tagPos.y - 28 - th;
-        tag.current.style.transform = `translate3d(${Math.round(tx)}px,${Math.round(ty)}px,0)`;
+      if (vBottom.current) {
+        vBottom.current.style.transform = `translate3d(${lx}px,${ly + GAP}px,0)`;
+        vBottom.current.style.height = `${Math.max(0, H - ly - GAP)}px`;
+      }
+      if (hLeft.current) {
+        hLeft.current.style.transform = `translate3d(0,${ly}px,0)`;
+        hLeft.current.style.width = `${Math.max(0, lx - GAP)}px`;
+      }
+      if (hRight.current) {
+        hRight.current.style.transform = `translate3d(${lx + GAP}px,${ly}px,0)`;
+        hRight.current.style.width = `${Math.max(0, W - lx - GAP)}px`;
+      }
+      if (markX.current) markX.current.style.transform = `translate3d(${lx}px,0,0)`;
+      if (markY.current) markY.current.style.transform = `translate3d(0,${ly}px,0)`;
+      if (icon.current) icon.current.style.transform = `translate3d(${pos.x - 10.5}px,${pos.y - 10.5}px,0) scale(${scale})`;
+
+      // Coordinates next to the icon, flipped near the edges.
+      const text = `x:${Math.round(mouse.x)}, y:${Math.round(mouse.y)}`;
+      if (label.current) {
+        if (text !== shown) {
+          label.current.textContent = text;
+          shown = text;
+        }
+        const tw = label.current.offsetWidth;
+        let tx = pos.x + 12;
+        let ty = pos.y + 8;
+        if (tx + tw > W - 12) tx = pos.x - 12 - tw;
+        if (ty + 18 > H - 12) ty = pos.y - 26;
+        label.current.style.transform = `translate3d(${Math.round(tx)}px,${Math.round(ty)}px,0)`;
+      }
+
+      // Brackets lock onto the hovered element, or collapse into the cursor.
+      const live = target && target.isConnected ? target.getBoundingClientRect() : null;
+      const pad = down ? 3 : PAD;
+      const goal: Box = live
+        ? { x: live.left - pad, y: live.top - pad, w: live.width + pad * 2, h: live.height + pad * 2 }
+        : { x: pos.x - 6, y: pos.y - 6, w: 12, h: 12 };
+      const kb = ease(live ? 0.24 : 0.3);
+      box.x += (goal.x - box.x) * kb;
+      box.y += (goal.y - box.y) * kb;
+      box.w += (goal.w - box.w) * kb;
+      box.h += (goal.h - box.h) * kb;
+      boxOpacity += ((live ? 1 : 0) - boxOpacity) * ease(live ? 0.25 : 0.12);
+      if (brackets.current) {
+        const b = brackets.current.style;
+        b.transform = `translate3d(${box.x}px,${box.y}px,0)`;
+        b.width = `${Math.max(0, box.w)}px`;
+        b.height = `${Math.max(0, box.h)}px`;
+        b.opacity = boxOpacity.toFixed(3);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
+      document.documentElement.classList.remove("lines-cursor");
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("mouseout", onOut);
       window.removeEventListener("pointerdown", onDown);
@@ -108,20 +179,35 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
     };
   }, [reduced]);
 
+  const hair = "absolute top-0 left-0 bg-white/[0.08]";
+  const corner = "absolute size-2 border-current";
   return (
     <div
       ref={root}
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-10 hidden opacity-0 transition-opacity duration-300 md:block"
+      className="pointer-events-none fixed inset-0 z-30 hidden overflow-hidden opacity-0 transition-opacity duration-300 md:block"
     >
-      <div ref={v} className="absolute inset-y-0 left-0 w-px bg-white/[0.14]" />
-      <div ref={h} className="absolute inset-x-0 top-0 h-px bg-white/[0.14]" />
+      <div ref={vTop} className={`${hair} w-px`} />
+      <div ref={vBottom} className={`${hair} w-px`} />
+      <div ref={hLeft} className={`${hair} h-px`} />
+      <div ref={hRight} className={`${hair} h-px`} />
       <div ref={markX} className="absolute top-[calc(var(--inset)-12px)] left-0 h-3 w-px bg-brand" />
       <div ref={markY} className="absolute top-0 left-[calc(var(--inset)-12px)] h-px w-3 bg-brand" />
-      <div ref={ring} className="crosshair-ring absolute top-0 left-0 size-5 rounded-full border border-white/30" />
-      <div ref={tag} className="crosshair-tag t-l12 tnum absolute top-0 left-0 border border-white/15 bg-screen px-2 py-1 whitespace-nowrap text-white/60">
-        <span ref={label}>X 0 · Y 0</span>
+      <div ref={brackets} className="crosshair-brackets absolute top-0 left-0 opacity-0">
+        <span className={`${corner} top-0 left-0 border-t border-l`} />
+        <span className={`${corner} top-0 right-0 border-t border-r`} />
+        <span className={`${corner} bottom-0 left-0 border-b border-l`} />
+        <span className={`${corner} right-0 bottom-0 border-r border-b`} />
       </div>
+      <div ref={icon} className="crosshair-icon absolute top-0 left-0 size-[21px]">
+        <svg width="21" height="21" viewBox="0 0 21 21" fill="none" aria-hidden>
+          <path d="M10.5 0.5V7M10.5 14V20.5M0.5 10.5H7M14 10.5H20.5" stroke="currentColor" strokeWidth="1" />
+          <path d="M10.5 8L13 10.5L10.5 13L8 10.5Z" stroke="currentColor" strokeWidth="1" />
+        </svg>
+      </div>
+      <span ref={label} className="crosshair-label tnum absolute top-0 left-0 text-[12px] leading-[18px] font-medium whitespace-nowrap text-white/60">
+        x:0, y:0
+      </span>
     </div>
   );
 }
