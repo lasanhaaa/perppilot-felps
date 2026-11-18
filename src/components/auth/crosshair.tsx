@@ -224,7 +224,7 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
           <path d="M10.5 8L13 10.5L10.5 13L8 10.5Z" stroke="currentColor" strokeWidth="1" />
         </svg>
       </div>
-      <span ref={label} className="crosshair-label tnum absolute top-0 left-0 text-[12px] leading-[18px] font-medium whitespace-nowrap text-white/60">
+      <span ref={label} className="crosshair-label tnum absolute top-0 left-0 text-[12px] leading-[18px] font-medium tracking-[0.04em] whitespace-nowrap text-white/60 uppercase">
         x:0, y:0
       </span>
     </div>
