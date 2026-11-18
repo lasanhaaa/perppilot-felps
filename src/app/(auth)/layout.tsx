@@ -1,5 +1,5 @@
-import { AuthShell } from "@/components/auth/auth-shell";
+import { LinesShell } from "@/components/auth/lines-shell";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <AuthShell>{children}</AuthShell>;
+  return <LinesShell>{children}</LinesShell>;
 }

@@ -4,27 +4,7 @@ import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icons";
 
-/** "Auth / Shell" (2058:3493): art panel + divider stripes on the left, form column on the right. */
-export function AuthShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-screen bg-screen">
-      <div
-        className="relative hidden w-[51.5%] flex-none bg-screen bg-cover bg-right lg:block"
-        style={{ backgroundImage: "url(/img/auth-art.png)" }}
-        aria-hidden
-      />
-      <div className="relative flex min-h-screen flex-1 flex-col">
-        <div className="flex h-[88px] items-center justify-end pr-10">
-          <LanguageSwitcher />
-        </div>
-        <div className="flex flex-1 items-center justify-center px-6 py-10">
-          <div className="anim-rise w-full max-w-[436px]">{children}</div>
-        </div>
-        <p className="pb-[28px] text-center text-[12px] leading-[18px] font-medium text-white/30">© 2026 PerpPilot. All rights reserved.</p>
-      </div>
-    </div>
-  );
-}
+/* Pieces shared by the auth screens. The layout itself is LinesShell (lines-shell.tsx). */
 
 export function LanguageSwitcher() {
   const [lang, setLang] = useState<"EN" | "DE">("EN");
@@ -59,15 +39,18 @@ export function AuthHeading({ title, description }: { title: ReactNode; descript
   );
 }
 
+/** Hairline segments; the segment of the current step fills in when the step opens. */
 export function StepProgress({ step, total = 3 }: { step: number; total?: number }) {
   return (
     <div className="flex items-center gap-4">
       <div className="flex flex-1 gap-2">
         {Array.from({ length: total }, (_, i) => (
-          <span key={i} className={cn("h-[2px] flex-1 transition-colors", i < step ? "bg-white" : "bg-white/30")} />
+          <span key={i} className="relative h-[2px] flex-1 overflow-hidden bg-white/20">
+            {i < step && <span className={cn("absolute inset-0 origin-left bg-white", i === step - 1 && "step-fill")} />}
+          </span>
         ))}
       </div>
-      <span className="text-[12px] leading-[18px] font-medium text-white/60">
+      <span className="tnum text-[12px] leading-[18px] font-medium text-white/60">
         0{step} / 0{total}
       </span>
     </div>

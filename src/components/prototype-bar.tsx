@@ -13,7 +13,11 @@ import { clearDraft } from "@/lib/draft";
  */
 const SCREENS: [string, string][] = [
   ["Login", "/login"],
+  ["Forgot password", "/forgot-password"],
   ["Sign up", "/signup"],
+  ["Verify e-mail", "/verify-email"],
+  ["First questions", "/onboarding"],
+  ["Welcome", "/welcome"],
   ["Overview", "/overview"],
   ["Setup your profile", "/setup"],
   ["Create bot", "/create-bot"],
