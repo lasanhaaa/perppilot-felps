@@ -5,14 +5,15 @@ import { useEffect, useRef } from "react";
 /**
  * "Cursor / Crosshair" (Figma 2247:4403), in the Nado style.
  *
- * - A small crosshair icon with a diamond replaces the mouse pointer on the auth screens. It
- *   follows with a little lag, which makes the movement feel soft.
+ * - A small crosshair icon with a diamond replaces the mouse pointer on the auth screens. The
+ *   icon, the hairlines and the coordinates are locked together on the mouse, no lag.
  * - Faint full-viewport hairlines stop short of it (they never meet at the cursor) and pass over
  *   everything, the panel included.
  * - The coordinates sit next to it as plain text, no box. Mint marks follow it on the rulers.
- * - Hovering a button, link or field: four brackets fly out from the cursor and lock onto it, as if
- *   selecting it. Pressing tightens them and turns them mint. Leaving collapses them back into the
- *   cursor as small squares.
+ * - Hovering a button, link or field: the pointer sticks to the element and disappears into it;
+ *   four small squares appear just inside its corners and expand outwards into brackets around
+ *   it, as if selecting it. Pressing tightens the brackets and turns them mint. Leaving shrinks
+ *   them back into small squares that fade where they were, and the pointer comes back.
  * - Inside a text field the normal I-beam comes back so typing feels normal.
  * Mouse and pen only.
  */
@@ -48,7 +49,7 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
     document.documentElement.classList.add("lines-cursor");
     const mouse = { x: 0, y: 0 };
     const pos = { x: 0, y: 0 }; // icon
-    const line = { x: 0, y: 0 }; // hairlines, a touch slower
+    const line = { x: 0, y: 0 }; // hairlines, same spot as the icon
     let target: Element | null = null;
     let typing = false;
     let inside = false;
@@ -57,6 +58,8 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
     let shown = "";
     const box: Box = { x: 0, y: 0, w: 0, h: 0 };
     let boxOpacity = 0;
+    let wasLive = false;
+    let squareFrames = 0; // frames the corners stay squares after locking on, before they open
 
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
@@ -66,6 +69,7 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
       target = targetOf(t);
       typing = !!t?.closest("input, textarea, select");
       el.classList.toggle("crosshair-typing", typing);
+      el.classList.toggle("crosshair-target", !!target);
       el.classList.toggle("crosshair-hidden", !!t?.closest("[data-cursor-auto]"));
       if (!inside) {
         inside = true;
@@ -99,12 +103,9 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const ease = (k: number) => (reduced ? 1 : 1 - Math.pow(1 - k, dt * 60));
-      const ki = ease(0.3);
-      const kl = ease(0.2);
-      pos.x += (mouse.x - pos.x) * ki;
-      pos.y += (mouse.y - pos.y) * ki;
-      line.x += (mouse.x - line.x) * kl;
-      line.y += (mouse.y - line.y) * kl;
+      // Icon, hairlines and coordinates sit exactly on the mouse, together.
+      pos.x = line.x = mouse.x;
+      pos.y = line.y = mouse.y;
       scale += ((down ? 0.7 : 1) - scale) * ease(0.3);
       const W = window.innerWidth;
       const H = window.innerHeight;
@@ -147,18 +148,34 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
         label.current.style.transform = `translate3d(${Math.round(tx)}px,${Math.round(ty)}px,0)`;
       }
 
-      // Brackets lock onto the hovered element, or collapse into the cursor.
+      // Brackets fly out of the pointer and lock onto the hovered element; on leave they shrink
+      // into small squares and fade where they are.
       const live = target && target.isConnected ? target.getBoundingClientRect() : null;
-      const pad = down ? 3 : PAD;
-      const goal: Box = live
-        ? { x: live.left - pad, y: live.top - pad, w: live.width + pad * 2, h: live.height + pad * 2 }
-        : { x: pos.x - 6, y: pos.y - 6, w: 12, h: 12 };
-      const kb = ease(live ? 0.24 : 0.3);
-      box.x += (goal.x - box.x) * kb;
-      box.y += (goal.y - box.y) * kb;
-      box.w += (goal.w - box.w) * kb;
-      box.h += (goal.h - box.h) * kb;
-      boxOpacity += ((live ? 1 : 0) - boxOpacity) * ease(live ? 0.25 : 0.12);
+      if (live) {
+        if (!wasLive) {
+          // Start as squares just inside the element's corners, then grow out.
+          const inner = Math.min(8, live.width / 4, live.height / 4);
+          box.x = live.left + inner;
+          box.y = live.top + inner;
+          box.w = live.width - inner * 2;
+          box.h = live.height - inner * 2;
+          boxOpacity = 0.35;
+          brackets.current?.classList.add("is-released");
+          squareFrames = reduced ? 0 : 3;
+        }
+        if (squareFrames > 0 && --squareFrames === 0) brackets.current?.classList.remove("is-released");
+        if (reduced) brackets.current?.classList.remove("is-released");
+        const pad = down ? 3 : PAD;
+        const kb = ease(0.2);
+        box.x += (live.left - pad - box.x) * kb;
+        box.y += (live.top - pad - box.y) * kb;
+        box.w += (live.width + pad * 2 - box.w) * kb;
+        box.h += (live.height + pad * 2 - box.h) * kb;
+      } else if (wasLive) {
+        brackets.current?.classList.add("is-released");
+      }
+      wasLive = !!live;
+      boxOpacity += ((live ? 1 : 0) - boxOpacity) * ease(live ? 0.25 : 0.1);
       if (brackets.current) {
         const b = brackets.current.style;
         b.transform = `translate3d(${box.x}px,${box.y}px,0)`;
@@ -187,10 +204,12 @@ export function Crosshair({ reduced }: { reduced: boolean }) {
       aria-hidden
       className="pointer-events-none fixed inset-0 z-30 hidden overflow-hidden opacity-0 transition-opacity duration-300 md:block"
     >
-      <div ref={vTop} className={`${hair} w-px`} />
-      <div ref={vBottom} className={`${hair} w-px`} />
-      <div ref={hLeft} className={`${hair} h-px`} />
-      <div ref={hRight} className={`${hair} h-px`} />
+      <div className="crosshair-hairlines">
+        <div ref={vTop} className={`${hair} w-px`} />
+        <div ref={vBottom} className={`${hair} w-px`} />
+        <div ref={hLeft} className={`${hair} h-px`} />
+        <div ref={hRight} className={`${hair} h-px`} />
+      </div>
       <div ref={markX} className="absolute top-[calc(var(--inset)-12px)] left-0 h-3 w-px bg-brand" />
       <div ref={markY} className="absolute top-0 left-[calc(var(--inset)-12px)] h-px w-3 bg-brand" />
       <div ref={brackets} className="crosshair-brackets absolute top-0 left-0 opacity-0">

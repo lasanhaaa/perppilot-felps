@@ -319,6 +319,27 @@
   transition: color 150ms ease;
   will-change: transform, width, height;
 }
+.crosshair-brackets > span {
+  transition:
+    width 220ms ease,
+    height 220ms ease,
+    background-color 220ms ease;
+}
+.crosshair-brackets.is-released > span {
+  width: 4px;
+  height: 4px;
+  border-width: 0;
+  background-color: currentColor;
+}
+.crosshair-hairlines {
+  transition: opacity 180ms ease;
+}
+/* Over a button, link or field the pointer turns into the brackets. */
+.crosshair-target .crosshair-icon,
+.crosshair-target .crosshair-label,
+.crosshair-target .crosshair-hairlines {
+  opacity: 0;
+}
 .crosshair-down .crosshair-icon,
 .crosshair-down .crosshair-brackets {
   color: var(--color-brand);
