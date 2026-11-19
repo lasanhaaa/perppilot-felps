@@ -150,6 +150,7 @@ export function Field({
   trailing,
   className,
   autoFocus,
+  labelAction,
 }: {
   label: string;
   placeholder?: string;
@@ -160,12 +161,17 @@ export function Field({
   trailing?: ReactNode;
   className?: string;
   autoFocus?: boolean;
+  /** Small link on the right of the label row, e.g. "Forgot password?". */
+  labelAction?: ReactNode;
 }) {
   const [show, setShow] = useState(false);
   const isPw = type === "password";
   return (
     <label className={cn("flex flex-col gap-2", className)}>
-      <span className="t-l14 text-white/90">{label}</span>
+      <span className="flex items-baseline justify-between gap-3">
+        <span className="t-l14 text-white/90">{label}</span>
+        {labelAction}
+      </span>
       <span
         className={cn(
           "flex h-[62px] items-center gap-3 rounded-sm border bg-field px-[18px] transition-colors focus-within:border-brand",

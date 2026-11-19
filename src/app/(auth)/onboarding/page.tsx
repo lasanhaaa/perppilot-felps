@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AuthHeading, StepProgress } from "@/components/auth/auth-shell";
+import { useLines } from "@/components/auth/lines-shell";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
@@ -24,10 +25,17 @@ const CAPITAL = ["Unter 5.000 €", "5.000 € bis 10.000 €", "10.000 € bis 
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { burst } = useLines();
   const [step, setStep] = useState(1);
+  const [dir, setDir] = useState<"next" | "back">("next");
   const [a, setA] = useState<Record<number, string>>({});
   const pick = (v: string) => setA((s) => ({ ...s, [step]: v }));
-  const next = () => (step < 3 ? setStep(step + 1) : router.push("/welcome"));
+  const go = (to: number) => {
+    setDir(to > step ? "next" : "back");
+    setStep(to);
+    burst(0.45);
+  };
+  const next = () => (step < 3 ? go(step + 1) : router.push("/welcome"));
 
   const heading = {
     1: { t: "Wie wurdest du auf uns aufmerksam?", d: "Wähle die Option, die am besten passt." },
@@ -36,7 +44,7 @@ export default function OnboardingPage() {
   }[step]!;
 
   return (
-    <div key={step} className="anim-rise flex flex-col gap-12">
+    <div key={step} className={cn("flex flex-col gap-12", dir === "next" ? "anim-step-next" : "anim-step-back")}>
       <div className="flex flex-col gap-3">
         <StepProgress step={step} />
         <div className="h-5" />
@@ -45,15 +53,16 @@ export default function OnboardingPage() {
 
       {step === 1 ? (
         <div className="grid grid-cols-3 gap-2">
-          {SOURCES.map((s) => {
+          {SOURCES.map((s, i) => {
             const on = a[1] === s.label;
             return (
               <button
                 key={s.label}
                 type="button"
                 onClick={() => pick(s.label)}
+                style={{ "--i": i } as React.CSSProperties}
                 className={cn(
-                  "flex h-[104px] flex-col items-center justify-center gap-3 rounded-sm border px-3 py-4 text-center transition-colors",
+                  "tile-in flex h-[104px] flex-col items-center justify-center gap-3 rounded-sm border px-3 py-4 text-center transition-colors",
                   on ? "border-brand bg-selected" : "border-line bg-raised hover:bg-hover",
                 )}
               >
@@ -67,20 +76,21 @@ export default function OnboardingPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {(step === 2 ? KNOWLEDGE : CAPITAL).map((o) => {
+          {(step === 2 ? KNOWLEDGE : CAPITAL).map((o, i) => {
             const on = a[step] === o;
             return (
               <button
                 key={o}
                 type="button"
                 onClick={() => pick(o)}
+                style={{ "--i": i } as React.CSSProperties}
                 className={cn(
-                  "t-b16 flex h-[58px] items-center justify-between gap-3 rounded-sm border px-[18px] text-left transition-colors",
+                  "tile-in t-b16 flex h-[58px] items-center justify-between gap-3 rounded-sm border px-[18px] text-left transition-colors",
                   on ? "border-brand bg-selected" : "border-line bg-raised hover:bg-hover",
                 )}
               >
                 {o}
-                {on && <Icon name="check" size={20} className="text-brand" />}
+                {on && <Icon name="check" size={20} className="anim-fade text-brand" />}
               </button>
             );
           })}
@@ -94,7 +104,7 @@ export default function OnboardingPage() {
           </Button>
         ) : (
           <div className="flex gap-2">
-            <Button variant="secondary" className="w-[142px]" onClick={() => setStep(step - 1)}>
+            <Button variant="secondary" className="w-[142px]" onClick={() => go(step - 1)}>
               Zurück
             </Button>
             <Button className="flex-1" onClick={next} disabled={!a[step]}>
