@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
 import { FlowHeading, SetupShell } from "@/components/shell/setup-shell";
 import { OptionRow } from "@/components/flow/rows";
-import { BotAvatar } from "@/components/ui/bot-avatar";
+import { BotTypeIcon } from "@/components/ui/bot-type-icon";
 import { CREATE_STEPS, MARKETS, useDraft } from "@/lib/draft";
 import { useStore } from "@/lib/store";
 import { PRESETS, type Coin, type PresetId } from "@/lib/mock";
@@ -55,7 +55,8 @@ function ChooseType() {
     clear();
     const look = freshLook(allBots);
     update({ type, avatar: look, avatarOriginal: look, ...(market && MARKETS.includes(market) ? { coin: market } : {}) });
-    router.push(type === "v3" ? "/create-bot/account" : "/create-bot/accounts");
+    // Next step: a short video about the bot, then Continue.
+    router.push(`/create-bot/video?type=${type}`);
   };
 
   return (
@@ -65,7 +66,7 @@ function ChooseType() {
         <div className="flex flex-col gap-2">
           <OptionRow
             onClick={() => pick("v3")}
-            logo={<BotAvatar avatar={{ shape: 9, eyes: 1, color: 0 }} size={40} />}
+            logo={<BotTypeIcon type="v3" />}
             name="V3 Bot"
             tag="Recommended"
             description="Earns fees from price moves inside a range, on one exchange"
@@ -73,7 +74,7 @@ function ChooseType() {
           />
           <OptionRow
             onClick={() => pick("point")}
-            logo={<BotAvatar avatar={{ shape: 6, eyes: 0, color: 6 }} size={40} />}
+            logo={<BotTypeIcon type="point" />}
             name="PointBot"
             description="Arbitrage between 2 to 5 exchanges, earns from the spread"
             difficulty="Advanced"

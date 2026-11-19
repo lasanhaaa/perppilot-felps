@@ -18,7 +18,7 @@ export default function ChooseAccountPage() {
   return (
     <SetupShell steps={CREATE_STEPS} current={0} exitLabel="Exit">
       <div className="flex w-[640px] flex-col gap-10">
-        <HeadingRow back="/create-bot" title="Choose an account" description="Your V3 bot trades on one account." />
+        <HeadingRow back="/create-bot/video?type=v3" title="Choose an account" description="Your V3 bot trades on one account." />
         <div className="flex flex-col gap-2">
           {allAccounts.map((a) => (
             <OptionRow

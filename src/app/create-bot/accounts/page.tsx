@@ -28,7 +28,7 @@ export default function ChooseAccountsPage() {
     <SetupShell steps={CREATE_STEPS} current={0} exitLabel="Exit">
       <div className="flex w-[640px] flex-col gap-8">
         <HeadingRow
-          back="/create-bot"
+          back="/create-bot/video?type=point"
           title="Choose accounts"
           description="PointBot trades the same markets on several exchanges at once. Pick 2 to 5 accounts, each on a different exchange."
         />

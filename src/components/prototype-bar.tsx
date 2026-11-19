@@ -21,6 +21,8 @@ const SCREENS: [string, string][] = [
   ["Overview", "/overview"],
   ["Setup your profile", "/setup"],
   ["Create bot", "/create-bot"],
+  ["Create bot · V3 video", "/create-bot/video?type=v3"],
+  ["Create bot · PointBot video", "/create-bot/video?type=point"],
   ["Bots", "/bots"],
   ["Bot detail", "/bots/bot-btc"],
   ["Accounts", "/accounts"],
