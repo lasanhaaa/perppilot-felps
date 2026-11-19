@@ -1,691 +1,575 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { useStore } from "@/lib/store";
-import { COIN_PRICE, PRESETS, priceFmt, type Bot, type Coin, type PresetId } from "@/lib/mock";
-import { PageHeader } from "@/components/shell/page-header";
-import { ArrowRight, Button, Dropdown } from "@/components/ui/primitives";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { Dropdown, Segmented } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
-import { CoinIcon } from "@/components/ui/coin";
-import { ExchangeLogo, EXCHANGES, type ExchangeId } from "@/components/ui/exchange-logo";
-import { InfoButton, Popover } from "@/components/ui/tooltip";
-import { BotFace } from "@/components/bots/bot-ui";
+import { InfoButton } from "@/components/ui/tooltip";
+import type { ExchangeId } from "@/components/ui/exchange-logo";
+import { HighlightsBand } from "@/components/explore-live/carousel";
+import { CATEGORIES, EXCHANGE_CODE, EXCHANGE_NAME, SETUPS, TICKER_START, priceFmt, sparkSeries, usd, type Category, type TickerEvent } from "@/components/explore-live/data";
+import { CountUp, Flash, LiveProvider, useInterval, useLive } from "@/components/explore-live/motion";
+import { AssetIcon, CategoryIcon, EntryLabel, ExchangeCode, GridSquare, HotTag, LiveDot, PerfChart, pct, signed } from "@/components/explore-live/parts";
+import { SetupDialog } from "@/components/explore-live/setup-dialog";
+import { SetupTile } from "@/components/explore-live/tiles";
 
-/* ------------------------------------------------------------------ */
-/* Data                                                                 */
-/* ------------------------------------------------------------------ */
-
-type Liquidity = "High" | "Medium" | "Low";
-
-/** One coin on one exchange. Volume and depth in $M, spread and funding in %. */
-type Venue = {
-  exchange: ExchangeId;
-  volume: number;
-  depth: number;
-  spread: number;
-  funding: number;
-  liquidity: Liquidity;
-  preset: PresetId | null;
-  score: number;
-};
-
-/** A coin and every exchange it trades on. Volatility is the coin's own, the same everywhere. */
-type Market = { coin: Coin; vol30: number; venues: Venue[] };
-
-const v = (exchange: ExchangeId, volume: number, depth: number, spread: number, funding: number, liquidity: Liquidity, preset: PresetId | null, score: number): Venue => ({
-  exchange,
-  volume,
-  depth,
-  spread,
-  funding,
-  liquidity,
-  preset,
-  score,
-});
-
-/** Explore Liquidity data (2094:28361). Coin rows add up their venues, so the totals match the Figma rows. */
-const MARKETS: Market[] = [
-  {
-    coin: "BTC",
-    vol30: 46,
-    venues: [
-      v("extended", 1840, 12.4, 0.01, 0.011, "High", "balanced", 98),
-      v("hyperliquid", 1210, 9.8, 0.01, 0.009, "High", "balanced", 95),
-      v("nado", 412, 3.1, 0.02, 0.013, "Medium", "balanced", 80),
-      v("lighter", 298, 2.2, 0.03, 0.01, "Medium", "conservative", 74),
-    ],
-  },
-  {
-    coin: "ETH",
-    vol30: 58,
-    venues: [
-      v("hyperliquid", 410, 3.0, 0.02, 0.009, "High", "balanced", 93),
-      v("extended", 322, 2.3, 0.02, 0.01, "High", "balanced", 90),
-      v("lighter", 128, 0.9, 0.03, 0.008, "Medium", "balanced", 72),
-      v("nado", 82, 0.6, 0.04, 0.012, "Medium", "conservative", 66),
-    ],
-  },
-  {
-    coin: "XRP",
-    vol30: 43,
-    venues: [
-      v("lighter", 74, 0.52, 0.03, 0.006, "High", "aggressive", 88),
-      v("extended", 52, 0.38, 0.03, 0.007, "High", "aggressive", 84),
-      v("nado", 30, 0.2, 0.05, 0.004, "Medium", "balanced", 63),
-    ],
-  },
-  {
-    coin: "SOL",
-    vol30: 71,
-    venues: [
-      v("extended", 196, 1.1, 0.03, 0.014, "High", "conservative", 86),
-      v("hyperliquid", 142, 0.75, 0.03, 0.013, "High", "conservative", 83),
-      v("lighter", 50, 0.25, 0.05, 0.016, "Medium", "conservative", 61),
-    ],
-  },
-  {
-    coin: "HYPE",
-    vol30: 84,
-    venues: [v("hyperliquid", 168, 1.05, 0.04, 0.021, "Medium", "conservative", 71), v("lighter", 46, 0.25, 0.06, 0.024, "Medium", "conservative", 58)],
-  },
-  {
-    coin: "DOGE",
-    vol30: 74,
-    venues: [
-      v("lighter", 44, 0.21, 0.06, 0.012, "Medium", "conservative", 64),
-      v("hyperliquid", 30, 0.14, 0.06, 0.011, "Medium", "conservative", 62),
-      v("extended", 14, 0.06, 0.09, 0.01, "Low", null, 40),
-    ],
-  },
-  {
-    coin: "SUI",
-    vol30: 79,
-    venues: [v("nado", 26, 0.21, 0.09, -0.004, "Medium", "conservative", 58), v("hyperliquid", 15, 0.11, 0.11, -0.002, "Low", null, 42)],
-  },
-  {
-    coin: "BNB",
-    vol30: 45,
-    venues: [v("nado", 8, 0.05, 0.18, 0.003, "Low", null, 31), v("lighter", 4, 0.03, 0.24, 0.002, "Low", null, 25)],
-  },
-];
-
-const LIQ: Record<Liquidity, { color: string; bars: number }> = {
-  High: { color: "text-gain", bars: 3 },
-  Medium: { color: "text-warning", bars: 2 },
-  Low: { color: "text-error", bars: 1 },
-};
-
-const fmtVol = (m: number) => (m >= 1000 ? `$${(m / 1000).toFixed(2)}B` : `$${Math.round(m)}M`);
-const fmtDepth = (m: number) => `$${m >= 1 ? m.toFixed(1) : m.toFixed(2)}M`;
-const fmtSpread = (p: number) => `${p.toFixed(2)}%`;
-const fmtFunding = (p: number) => `${p < 0 ? "−" : "+"}${Math.abs(p).toFixed(3)}%`;
-const best = (venues: Venue[]) => [...venues].sort((a, b) => b.score - a.score)[0];
-const sum = (venues: Venue[], k: "volume" | "depth") => venues.reduce((t, x) => t + x[k], 0);
-
-/** Market cell (chevron + coin + bot chip) gets the most room; the last 40px column holds the arrow, covered by actions on hover. */
-const COLS = "grid grid-cols-[minmax(264px,2.2fr)_1fr_1fr_0.8fr_1fr_1fr_1fr_1.25fr_40px] items-center gap-2 px-4";
-
-/** Opaque row-hover color for the hover actions, so they cover the cells under them: screen + card + hover. */
-const HOVER_BG = {
-  background: "linear-gradient(var(--color-hover), var(--color-hover)), linear-gradient(var(--color-card), var(--color-card)), var(--color-screen)",
-};
-
-type Sel = { coin: Coin; ex: ExchangeId };
-
-/* ------------------------------------------------------------------ */
-/* Page                                                                 */
-/* ------------------------------------------------------------------ */
-
-/**
- * Explore Liquidity (2094:28361). One expandable row per coin; expanded, it lists every exchange
- * with its own numbers, the user's account there and their bots. Row hover shows Apply <preset>
- * (when the user's bot runs another preset) and Create bot. Info icons explain the suggestion.
+/*
+ * Explore Liquidity · v4.3 (Figma 2306:3100). Live reference bots ranked by market, range and fee
+ * rate: a live ticker, key figures that keep counting, the endless highlights band, and one row of
+ * setups per category. Numbers count up when first seen and flash green or red when they move,
+ * after Chuck's original tool. The older market-by-market table lives at /explore/markets.
  */
-export default function ExplorePage() {
-  const router = useRouter();
-  const { hasProfile, allAccounts, allBots } = useStore();
-  const [ex, setEx] = useState<"all" | ExchangeId>("all");
+
+type View = "own" | "free" | "academy" | "mentoring";
+/** APR after each plan's fees, relative to the user's own plan. */
+const VIEW_SCALE: Record<View, number> = { own: 1, free: 0.82, academy: 0.9, mentoring: 0.95 };
+
+type Ranking = "score" | "apr";
+type SortBy = "rank" | "inrange" | "exits" | "newest";
+type Shown = "all" | "curated";
+type Layout = "tiles" | "list";
+
+const TILE = 248;
+const TILE_GAP = 16;
+
+export default function ExploreLivePage() {
+  const [view, setView] = useState<View>("own");
+  return (
+    <LiveProvider scale={VIEW_SCALE[view]}>
+      <ExploreLive view={view} setView={setView} />
+    </LiveProvider>
+  );
+}
+
+function ExploreLive({ view, setView }: { view: View; setView: (v: View) => void }) {
   const [q, setQ] = useState("");
-  const [botType, setBotType] = useState<"v3" | "point">("v3");
-  const [sort, setSort] = useState("score");
-  const [open, setOpen] = useState<Set<Coin>>(() => new Set<Coin>(["BTC"]));
-  const [sel, setSel] = useState<Sel>({ coin: "BTC", ex: "extended" });
-  const [preset, setPreset] = useState<PresetId>("balanced");
-  const [why, setWhy] = useState<{ el: HTMLElement; side: "left" | "bottom" } | null>(null);
-  const closeWhy = useCallback(() => setWhy(null), []);
+  const [ranking, setRanking] = useState<Ranking>("score");
+  const [ex, setEx] = useState<"all" | ExchangeId>("all");
+  const [sort, setSort] = useState<SortBy>("rank");
+  const [shown, setShown] = useState<Shown>("all");
+  const [layout, setLayout] = useState<Layout>("tiles");
+  const [open, setOpen] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ text: string; k: number } | null>(null);
 
-  const rows = useMemo(() => {
-    const l = MARKETS.map((m) => ({ ...m, venues: m.venues.filter((x) => ex === "all" || x.exchange === ex) })).filter(
-      (m) => m.venues.length > 0 && `${m.coin}-USD`.toLowerCase().includes(q.trim().toLowerCase()),
-    );
-    if (sort === "volume") return l.sort((a, b) => sum(b.venues, "volume") - sum(a.venues, "volume"));
-    if (sort === "spread") return l.sort((a, b) => best(a.venues).spread - best(b.venues).spread);
-    return l.sort((a, b) => best(b.venues).score - best(a.venues).score);
-  }, [ex, q, sort]);
+  // A shared link (/explore?setup=<id>) opens that setup.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("setup");
+    if (id && SETUPS[id]) setOpen(id);
+  }, []);
 
-  const market = MARKETS.find((m) => m.coin === sel.coin) ?? MARKETS[0];
-  const venue = market.venues.find((x) => x.exchange === sel.ex) ?? best(market.venues);
+  const openSetup = useCallback((id: string) => {
+    setOpen(id);
+    window.history.replaceState(null, "", `/explore?setup=${id}`);
+  }, []);
+  const close = useCallback(() => {
+    setOpen(null);
+    window.history.replaceState(null, "", "/explore");
+  }, []);
+  const showToast = useCallback((text: string) => setToast((t) => ({ text, k: (t?.k ?? 0) + 1 })), []);
 
-  /** The user's bots of the chosen type on a coin (and exchange). */
-  const botsOn = (coin: Coin, exchange?: ExchangeId, type: Bot["type"] = botType) =>
-    allBots.filter((b) => b.type === type && b.coin === coin && (!exchange || b.exchange === exchange));
-  const accountsOn = (exchange: ExchangeId) => allAccounts.filter((a) => a.exchange === exchange);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
 
-  const select = (coin: Coin, venueEx: ExchangeId) => {
-    const m = MARKETS.find((x) => x.coin === coin) ?? MARKETS[0];
-    const vv = m.venues.find((x) => x.exchange === venueEx) ?? best(m.venues);
-    setSel({ coin, ex: vv.exchange });
-    setPreset(vv.preset ?? "conservative");
-    setWhy(null);
+  const reset = () => {
+    setQ("");
+    setRanking("score");
+    setEx("all");
+    setSort("rank");
+    setShown("all");
   };
+  const filtered = q.trim() !== "" || ranking !== "score" || ex !== "all" || sort !== "rank" || shown !== "all";
 
-  const toggle = (coin: Coin) =>
-    setOpen((s) => {
-      const n = new Set(s);
-      if (n.has(coin)) n.delete(coin);
-      else n.add(coin);
-      return n;
-    });
-
-  const createHref = (coin: Coin, exchange: ExchangeId | null, p: PresetId) =>
-    hasProfile ? `/create-bot?type=v3&market=${coin}&preset=${p}${exchange ? `&exchange=${exchange}` : ""}` : "/setup";
-  const applyHref = (bot: Bot, p: PresetId) => `/bots/${bot.id}?preset=${p}`;
-
-  const panelBots = botsOn(market.coin, undefined, "v3");
+  /** Setups of a category after the filters, in rank order (rank = position by score or APR). */
+  const rowsOf = useCallback(
+    (cat: Category) => {
+      const needle = q.trim().toLowerCase();
+      const ranked = cat.setups
+        .map((id) => SETUPS[id])
+        .filter((s) => (ex === "all" || s.exchange === ex) && (shown === "all" || s.curated) && (!needle || `${s.coin}-usd ${EXCHANGE_NAME[s.exchange]}`.toLowerCase().includes(needle)))
+        .sort((a, b) => (ranking === "apr" ? b.apr - a.apr : b.score - a.score))
+        .map((s, i) => ({ s, rank: i + 1 }));
+      if (sort === "inrange") return ranked.sort((a, b) => b.s.inRange - a.s.inRange);
+      if (sort === "exits") return ranked.sort((a, b) => a.s.exits - b.s.exits);
+      if (sort === "newest") return ranked.sort((a, b) => a.s.runtime - b.s.runtime);
+      return ranked;
+    },
+    [q, ex, shown, ranking, sort],
+  );
 
   return (
-    <div className="flex min-h-screen">
-      <div className="min-w-0 flex-1">
-        <PageHeader
-          border={false}
-          className="min-h-[101px] px-8"
-          title="Explore Liquidity"
-          description="Find markets with deep order books and steady volume for range bots."
-          actions={
-            <span className="t-b14 flex items-center gap-2 self-start pt-3 text-white/50">
-              <span className="size-1.5 rounded-full bg-success" />
-              Live · updated 2 min ago
-            </span>
-          }
-        />
-        <div className="flex flex-col gap-4 px-8 pb-12">
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              ["Markets tracked", "148", "Across 4 exchanges"],
-              ["Range-friendly now", "23", "High liquidity, calm price"],
-              ["Deepest book", "BTC-USD", "$12.4M within ±2%"],
-              ["Avg spread · Top 20", "0.021%", "Lower is cheaper to trade"],
-            ].map(([l, val, s]) => (
-              <div key={l} className="flex flex-col gap-2 rounded-sm border border-line bg-card p-5">
-                <span className="t-l12 text-white/50">{l}</span>
-                <span className="text-[24px] leading-[31px]">{val}</span>
-                <span className="t-b14 text-white/60">{s}</span>
-              </div>
-            ))}
-          </div>
+    <div className="flex min-h-screen flex-col">
+      <Ticker />
 
-          <div className="flex items-center gap-2 pt-2">
-            {(["all", "extended", "hyperliquid", "lighter", "nado"] as const).map((x) => (
-              <button
-                key={x}
-                type="button"
-                onClick={() => setEx(x)}
-                className={cn("t-b14 h-10 rounded-sm border px-3.5 transition-colors", ex === x ? "border-transparent bg-white/10 text-white" : "border-line text-white/70 hover:text-white")}
-              >
-                {x === "all" ? "All exchanges" : EXCHANGES[x].name}
-              </button>
-            ))}
-            <span className="flex-1" />
-            <label className="flex h-10 w-[240px] items-center gap-2 rounded-sm border border-line bg-raised px-3 focus-within:border-white/30">
-              <Icon name="search" size={18} className="opacity-50" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search market" className="t-b14 w-full bg-transparent placeholder:text-white/40" />
-            </label>
-            <Dropdown
-              className="w-[184px]"
-              value={botType}
-              onChange={setBotType}
-              options={[
-                { value: "v3", label: "Bot type: V3 Bot" },
-                { value: "point", label: "Bot type: PointBot" },
-              ]}
-            />
-            <Dropdown
-              className="w-[220px]"
-              value={sort}
-              onChange={setSort}
-              options={[
-                { value: "score", label: "Sort: Liquidity score" },
-                { value: "volume", label: "Sort: 24h volume" },
-                { value: "spread", label: "Sort: Spread" },
-              ]}
-            />
-          </div>
-
-          <section className="rounded-sm border border-line bg-card">
-            <div className={cn(COLS, "t-l12 h-11 border-b border-line text-white/40")}>
-              <span className="pl-8">Market</span>
-              <span className="text-right">24H volume</span>
-              <span className="text-right">Depth ±2%</span>
-              <span className="text-right">Spread</span>
-              <span className="text-right">Volatility · 30D</span>
-              <span className="text-right">Funding · 8H</span>
-              <span className="pl-3">Liquidity</span>
-              <span className="flex items-center gap-1">
-                Suggested preset
-                <InfoButton
-                  label="How the suggestion works"
-                  tip="Suggested from the last 30 days of price moves and order book depth. Click for details."
-                  active={why?.side === "bottom"}
-                  onClick={(el) => setWhy((w) => (w?.el === el ? null : { el, side: "bottom" }))}
-                />
-              </span>
-              <span />
-            </div>
-
-            {rows.map((m, i) => {
-              const lastCoin = i === rows.length - 1;
-              const single = m.venues.length === 1;
-              const expanded = !single && open.has(m.coin);
-              const top = best(m.venues);
-              const coinBots = botsOn(m.coin, single ? top.exchange : undefined);
-              return (
-                <Fragment key={m.coin}>
-                  <Row
-                    className={cn(
-                      !expanded && !lastCoin && "border-b border-white/6",
-                      expanded ? "bg-field" : sel.coin === m.coin && (!single || sel.ex === top.exchange) && "bg-hover",
-                    )}
-                    onClick={() => {
-                      if (!single) toggle(m.coin);
-                      // A one-exchange row (exchange filter on) picks that exchange; a coin row keeps the exchange picked inside it.
-                      if (single || sel.coin !== m.coin) select(m.coin, top.exchange);
-                    }}
-                    label={`${m.coin}-USD`}
-                    expanded={single ? undefined : expanded}
-                    actions={
-                      <RowActions
-                        suggested={top.preset}
-                        apply={applyFor(coinBots, top.preset)}
-                        onApply={(b) => top.preset && router.push(applyHref(b, top.preset))}
-                        onCreate={() => router.push(createHref(m.coin, single ? top.exchange : null, top.preset ?? "conservative"))}
-                      />
-                    }
-                    market={
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="grid size-6 flex-none place-items-center text-white/40">
-                          {!single && <Icon name="chevron-right" size={16} className={cn("transition-transform", expanded && "rotate-90")} />}
-                        </span>
-                        <CoinIcon coin={m.coin} size={24} round />
-                        <span className="flex min-w-0 flex-col pl-1">
-                          <span className="flex items-center gap-2 whitespace-nowrap">
-                            {m.coin}-USD
-                            {coinBots.length > 0 && <BotChip bots={coinBots} />}
-                          </span>
-                          {single ? (
-                            <span className="flex items-center gap-1.5 text-white/40">
-                              <ExchangeLogo id={top.exchange} size={14} />
-                              {EXCHANGES[top.exchange].name}
-                            </span>
-                          ) : (
-                            <span className="text-white/40">On {m.venues.length} exchanges</span>
-                          )}
-                        </span>
-                      </span>
-                    }
-                    cells={{
-                      volume: fmtVol(sum(m.venues, "volume")),
-                      depth: fmtDepth(sum(m.venues, "depth")),
-                      spread: fmtSpread(top.spread),
-                      vol30: `${m.vol30}%`,
-                      funding: fmtFunding(top.funding),
-                      liquidity: top.liquidity,
-                      preset: top.preset,
-                    }}
-                    tall
-                  />
-                  {expanded &&
-                    m.venues.map((x, j) => {
-                      const lastVenue = j === m.venues.length - 1;
-                      const accs = accountsOn(x.exchange);
-                      const vBots = botsOn(m.coin, x.exchange);
-                      const on = sel.coin === m.coin && sel.ex === x.exchange;
-                      return (
-                        <Row
-                          key={x.exchange}
-                          className={cn(on ? "bg-hover" : "bg-field", lastVenue && !lastCoin && "border-b border-white/6")}
-                          onClick={() => select(m.coin, x.exchange)}
-                          label={`${m.coin}-USD on ${EXCHANGES[x.exchange].name}`}
-                          pressed={on}
-                          tree={lastVenue ? "last" : "mid"}
-                          actions={
-                            <RowActions
-                              suggested={x.preset}
-                              apply={applyFor(vBots, x.preset)}
-                              onApply={(b) => x.preset && router.push(applyHref(b, x.preset))}
-                              onCreate={() => router.push(createHref(m.coin, x.exchange, x.preset ?? "conservative"))}
-                            />
-                          }
-                          market={
-                            <span className="flex min-w-0 items-center gap-2.5 pl-11">
-                              <ExchangeLogo id={x.exchange} size={20} />
-                              <span className="flex min-w-0 flex-col">
-                                <span className="flex items-center gap-2">
-                                  {EXCHANGES[x.exchange].name}
-                                  {x === top && <span className="t-l12 border border-line px-1.5 text-white/60">Best</span>}
-                                </span>
-                                <span className="truncate text-white/40">
-                                  {accs.length > 0
-                                    ? `Account: ${accs[0].name}${accs.length > 1 ? ` +${accs.length - 1}` : ""}${vBots.length > 0 ? ` · ${vBots.length} ${vBots.length === 1 ? "bot" : "bots"}` : ""}`
-                                    : "Not connected"}
-                                </span>
-                              </span>
-                            </span>
-                          }
-                          cells={{
-                            volume: fmtVol(x.volume),
-                            depth: fmtDepth(x.depth),
-                            spread: fmtSpread(x.spread),
-                            vol30: `${m.vol30}%`,
-                            funding: fmtFunding(x.funding),
-                            liquidity: x.liquidity,
-                            preset: x.preset,
-                          }}
-                        />
-                      );
-                    })}
-                </Fragment>
-              );
-            })}
-            {rows.length === 0 && <p className="t-b14 p-6 text-center text-white/40">No market matches “{q}”.</p>}
-          </section>
-          <p className="t-b14 text-white/40">Coin rows add up volume and depth across exchanges. Liquidity combines depth within ±2%, spread and 24h volume. Not financial advice.</p>
+      <header className="flex items-start gap-6 px-10 pt-7">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h1 className="t-h24">Explore Liquidity</h1>
+          <p className="t-b14 text-white/60">60 V3 setups running live right now, ranked by market, range and fee rate.</p>
         </div>
-      </div>
-
-      <aside className="sticky top-0 flex h-screen w-[336px] flex-none flex-col border-l border-line">
-        <div className="flex flex-col gap-3 border-b border-line px-5 py-6">
-          <span className="flex items-center gap-3">
-            <CoinIcon coin={market.coin} size={32} round />
-            <span className="text-[24px] leading-[29px] font-medium">{market.coin}-USD</span>
-          </span>
-          <span className="flex items-center justify-between">
-            <span className="t-b14 flex items-center gap-2 text-white/70">
-              <ExchangeLogo id={venue.exchange} size={16} />
-              {EXCHANGES[venue.exchange].name}
-            </span>
-            <span className={cn("t-l12 flex items-center gap-1.5", LIQ[venue.liquidity].color)}>
-              <Bars n={LIQ[venue.liquidity].bars} />
-              {venue.liquidity}
-            </span>
-          </span>
+        <div className="flex items-center gap-3">
+          <span className="t-l12 text-white/30">View as</span>
+          <Segmented
+            size="sm"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "own", label: "Own view" },
+              { value: "free", label: "Free" },
+              { value: "academy", label: "Academy" },
+              { value: "mentoring", label: "Mentoring" },
+            ]}
+          />
         </div>
-        <div className="no-scrollbar flex flex-1 flex-col overflow-y-auto">
-          <div className="flex flex-col gap-3 border-b border-line px-5 py-5">
-            <span className="t-l12 text-white/40">Order book depth · ±2%</span>
-            <Depth seed={venue.score} />
-            <span className="t-b14 flex justify-between text-white/70">
-              <span>Bids {fmtDepth(venue.depth * 0.51)}</span>
-              <span>Asks {fmtDepth(venue.depth * 0.49)}</span>
-            </span>
-          </div>
-          {[
-            ["Price", priceFmt(COIN_PRICE[market.coin])],
-            ["24H volume", fmtVol(venue.volume)],
-            ["Spread", fmtSpread(venue.spread)],
-            ["Volatility · 30D", `${market.vol30}%`],
-            ["Funding · 8H", fmtFunding(venue.funding)],
-          ].map(([l, val]) => (
-            <div key={l} className="flex h-[42px] items-center justify-between border-b border-white/6 px-5">
-              <span className="t-l12 text-white/40">{l}</span>
-              <span className="t-b14 tnum">{val}</span>
-            </div>
+      </header>
+
+      <div className="flex flex-col gap-7 px-10 pt-7 pb-14">
+        <KeyFigures />
+
+        <HighlightsBand onOpen={openSetup} />
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex h-10 w-[260px] items-center gap-2 rounded-sm border border-line bg-raised px-3 focus-within:border-white/30">
+            <Icon name="search" size={18} className="opacity-50" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search market" className="t-b14 w-full bg-transparent placeholder:text-white/40" />
+          </label>
+          <Segmented
+            size="sm"
+            value={ranking}
+            onChange={setRanking}
+            options={[
+              { value: "score", label: "Score" },
+              { value: "apr", label: "APR" },
+            ]}
+          />
+          <Dropdown
+            className="w-[176px]"
+            value={ex}
+            onChange={setEx}
+            options={[
+              { value: "all", label: "Exchange: All" },
+              { value: "hyperliquid", label: "Exchange: Hyperliquid" },
+              { value: "nado", label: "Exchange: Nado" },
+              { value: "lighter", label: "Exchange: Lighter" },
+              { value: "extended", label: "Exchange: Extended" },
+            ]}
+          />
+          <Dropdown
+            className="w-[176px]"
+            value={sort}
+            onChange={setSort}
+            options={[
+              { value: "rank", label: ranking === "apr" ? "Sort: APR" : "Sort: Score" },
+              { value: "inrange", label: "Sort: In range" },
+              { value: "exits", label: "Sort: Fewest exits" },
+              { value: "newest", label: "Sort: Newest" },
+            ]}
+          />
+          <button
+            type="button"
+            onClick={reset}
+            disabled={!filtered}
+            className="t-b14 h-10 rounded-sm border border-line px-3.5 text-white/80 transition-colors hover:bg-hover disabled:text-white/30 disabled:hover:bg-transparent"
+          >
+            Reset
+          </button>
+          <InfoButton label="How ranking works" tip="Score blends APR, time in range and range exits, adjusted for risk. APR ranks by return alone. Ranks restart in every category." />
+          <span className="flex-1" />
+          <Segmented
+            size="sm"
+            value={shown}
+            onChange={setShown}
+            options={[
+              { value: "all", label: "All" },
+              { value: "curated", label: "Curated" },
+            ]}
+          />
+          <Segmented
+            size="sm"
+            value={layout}
+            onChange={setLayout}
+            options={[
+              {
+                value: "tiles",
+                label: (
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="grid" size={14} />
+                    Tiles
+                  </span>
+                ),
+              },
+              {
+                value: "list",
+                label: (
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="list" size={14} />
+                    List
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </div>
+
+        {/* One section per category. The key restarts the stagger when the filters change. */}
+        <div key={`${layout}-${q}-${ranking}-${ex}-${sort}-${shown}`} className="flex flex-col gap-10">
+          {CATEGORIES.map((cat) => (
+            <CategorySection key={cat.id} cat={cat} rows={rowsOf(cat)} layout={layout} filtered={filtered} onReset={reset} onOpen={openSetup} />
           ))}
-          <div className="flex flex-col gap-3 px-5 pt-6 pb-4">
-            <span className="t-l12 flex items-center gap-1 text-white/40">
-              Strategy preset
-              <InfoButton
-                label={`Why this preset for ${market.coin}-USD`}
-                active={why?.side === "left"}
-                onClick={(el) => setWhy((w) => (w?.el === el ? null : { el, side: "left" }))}
-              />
+        </div>
+
+        <p className="t-b14 text-white/30">APR is the past result of paper reference bots after your plan’s fees. Not a promise of future returns.</p>
+      </div>
+
+      {open && <SetupDialog id={open} onClose={close} onSwitch={openSetup} onToast={showToast} />}
+
+      {toast && (
+        <div key={toast.k} role="status" className="anim-rise fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 border border-line-strong bg-[#0f1316] px-4 py-2.5 shadow-2xl">
+          <span className="t-b14 flex items-center gap-2">
+            <Icon name="check" size={16} className="text-gain" />
+            {toast.text}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Live ticker: reference bots earning, re-ranging and moving APR ---------- */
+
+const age = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`);
+
+function Ticker() {
+  const reduced = useReducedMotion();
+  const live = useLive();
+  const [items, setItems] = useState<TickerEvent[]>(TICKER_START);
+  const next = useRef(100);
+  const pool = useMemo(() => Object.values(SETUPS), []);
+
+  useInterval(() => setItems((l) => l.map((e) => ({ ...e, age: e.age + 1 }))), 1000);
+  useInterval(
+    () => {
+      const s = pool[Math.floor(Math.random() * pool.length)];
+      const r = Math.random();
+      const kind: TickerEvent["kind"] = r < 0.72 ? "fees" : r < 0.86 ? "rerange" : "apr";
+      const value = kind === "fees" ? +(0.8 + Math.random() * 34).toFixed(2) : kind === "apr" ? live.apr(s.id) : 0;
+      setItems((l) => [{ id: next.current++, coin: s.coin, exchange: s.exchange, kind, value, age: 0, fresh: true }, ...l.map((e) => ({ ...e, fresh: false }))].slice(0, 14));
+    },
+    2600,
+    !reduced,
+  );
+
+  return (
+    <div className="flex h-10 items-stretch overflow-hidden border-b border-line" aria-label="Live reference bots">
+      <span className="t-l12 flex flex-none items-center gap-2 border-r border-line pr-4 pl-10">
+        <LiveDot />
+        <span className="text-gain">Live</span>
+        <span className="text-white/30">Reference bots</span>
+      </span>
+      <div className="flex min-w-0 flex-1 items-stretch whitespace-nowrap">
+        {items.map((e) => (
+          <span key={e.id} className={cn("flex flex-none items-stretch overflow-hidden border-r border-line", e.fresh && "el-tick-in")}>
+            <span className="t-b14 tnum flex items-center gap-2 px-4">
+              <AssetIcon coin={e.coin} size={14} />
+              <span>{e.coin}-USD</span>
+              <span className="text-white/30">{EXCHANGE_NAME[e.exchange]}</span>
+              {e.kind === "fees" && <span className="text-gain">+{usd(e.value)} fees</span>}
+              {e.kind === "rerange" && <span className="text-white/60">Re-ranged</span>}
+              {e.kind === "apr" && <span className="text-gain">APR {pct(e.value)}</span>}
+              <span className="text-white/30">{age(e.age)}</span>
             </span>
-            <div className="flex flex-col gap-1 rounded-sm border border-line bg-raised p-3.5">
-              {(Object.keys(PRESETS) as PresetId[]).map((id) => {
-                const p = PRESETS[id];
-                const on = id === preset;
-                return (
-                  <button key={id} type="button" onClick={() => setPreset(id)} className={cn("flex flex-col gap-1 rounded-sm px-3 py-2.5 text-left transition-colors", on ? "bg-white/8" : "hover:bg-white/[0.03]")}>
-                    <span className="flex items-center gap-2">
-                      <span className={cn("text-[18px] leading-[27px]", on ? "font-medium text-white" : "text-white/60")}>{p.name}</span>
-                      {id === venue.preset && <span className="t-l12 border border-line px-1.5 py-0.5 text-white/60">Suggested</span>}
-                    </span>
-                    <span className="flex gap-2.5">
-                      <span className={cn("t-l12", on ? "text-white/60" : "text-white/30")}>
-                        ±{p.range}% · {p.inRange}% in range
-                      </span>
-                      <span className={cn("t-l12 text-gain", !on && "opacity-60")}>{p.yr}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {panelBots.map((b) => (
-              <div key={b.id} className="flex items-center gap-3 rounded-sm border border-line bg-field px-3 py-2.5">
-                <BotFace bot={b} size={24} />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="t-b14 truncate">
-                    {panelBots.length === 1 ? "Your bot" : b.name} on {b.account}
-                  </span>
-                  <span className="t-l12 text-white/40">
-                    Uses {PRESETS[b.preset].name} · ±{PRESETS[b.preset].range}%
-                  </span>
-                </span>
-                {b.preset === preset ? (
-                  <span className="t-l12 px-1 text-white/40">In use</span>
-                ) : (
-                  <Button variant="secondary" size="xs" onClick={() => router.push(applyHref(b, preset))} aria-label={`Apply ${PRESETS[preset].name} to ${b.name}`}>
-                    Apply
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-4 border-t border-line px-5 pt-5 pb-6">
-          <Button className="w-full" iconRight={<ArrowRight />} onClick={() => router.push(createHref(market.coin, venue.exchange, preset))}>
-            {hasProfile ? "Create V3 bot" : "Setup your profile"}
-          </Button>
-        </div>
-      </aside>
-
-      {why && (
-        <Popover anchor={why.el} side={why.side} onClose={closeWhy} label="Why this preset">
-          <WhyPreset market={market} venue={venue} />
-        </Popover>
-      )}
-    </div>
-  );
-}
-
-/** The first V3 bot that runs another preset than the suggested one (the one Apply opens), if any. */
-function applyFor(bots: Bot[], suggested: PresetId | null) {
-  if (!suggested) return null;
-  return bots.find((b) => b.type === "v3" && b.preset !== suggested) ?? null;
-}
-
-/* ------------------------------------------------------------------ */
-/* Rows                                                                 */
-/* ------------------------------------------------------------------ */
-
-function Row({
-  market,
-  cells,
-  actions,
-  onClick,
-  className,
-  label,
-  expanded,
-  pressed,
-  tree,
-  tall,
-}: {
-  market: ReactNode;
-  cells: { volume: string; depth: string; spread: string; vol30: string; funding: string; liquidity: Liquidity; preset: PresetId | null };
-  actions: ReactNode;
-  onClick: () => void;
-  className?: string;
-  label: string;
-  expanded?: boolean;
-  pressed?: boolean;
-  /** Exchange rows under an expanded coin: tree line + tick, inset divider. */
-  tree?: "mid" | "last";
-  tall?: boolean;
-}) {
-  return (
-    <div className={cn("group relative transition-colors hover:bg-hover", className)}>
-      {tree && (
-        <>
-          <span aria-hidden className={cn("absolute top-0 left-[28px] w-px bg-white/15", tree === "last" ? "h-1/2" : "h-full")} />
-          <span aria-hidden className="absolute top-1/2 left-[28px] h-px w-[18px] bg-white/15" />
-          <span aria-hidden className="absolute top-0 right-0 left-[60px] h-px bg-white/6" />
-        </>
-      )}
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={label}
-        aria-expanded={expanded}
-        aria-pressed={pressed}
-        className={cn(COLS, "t-b14 w-full text-left", tall ? "min-h-[67px] py-3" : "min-h-[59px] py-2")}
-      >
-        {market}
-        <span className="tnum text-right">{cells.volume}</span>
-        <span className="tnum text-right">{cells.depth}</span>
-        <span className="tnum text-right">{cells.spread}</span>
-        <span className="tnum text-right">{cells.vol30}</span>
-        <span className="tnum text-right">{cells.funding}</span>
-        <span className={cn("t-l12 flex items-center gap-2 pl-3", LIQ[cells.liquidity].color)}>
-          <Bars n={LIQ[cells.liquidity].bars} />
-          {cells.liquidity}
-        </span>
-        <span className={cells.preset ? "" : "text-white/40"}>{cells.preset ? PRESETS[cells.preset].name : "Not recommended"}</span>
-        <Icon name="arrow-right" size={20} className="justify-self-end text-white/50" />
-      </button>
-      {actions}
-    </div>
-  );
-}
-
-/** Row hover actions (Button small, 2142:8347): Apply <suggested preset> to the user's bot, and Create bot. */
-function RowActions({ suggested, apply, onApply, onCreate }: { suggested: PresetId | null; apply: Bot | null; onApply: (b: Bot) => void; onCreate: () => void }) {
-  return (
-    <div
-      className="pointer-events-none absolute inset-y-0 right-0 flex items-center gap-2 px-4 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
-      style={HOVER_BG}
-    >
-      {apply && suggested && (
-        <Button variant="secondary" size="xs" onClick={() => onApply(apply)} title={`Opens ${apply.name} on ${apply.account} with ${PRESETS[suggested].name} picked`}>
-          Apply {PRESETS[suggested].name}
-        </Button>
-      )}
-      <Button size="xs" onClick={onCreate}>
-        Create bot
-      </Button>
-    </div>
-  );
-}
-
-/** "1 bot" chip next to the pair: the bots' faces (up to 2) and the count. */
-function BotChip({ bots }: { bots: Bot[] }) {
-  return (
-    <span className="t-l12 flex h-5 flex-none items-center gap-1 border border-line pr-1.5 pl-1 whitespace-nowrap text-white/60" title={bots.map((b) => `${b.name} on ${b.account}`).join(", ")}>
-      <span className="flex">
-        {bots.slice(0, 2).map((b, i) => (
-          <span key={b.id} className={cn(i > 0 && "-ml-1")}>
-            <BotFace bot={b} size={14} />
           </span>
         ))}
-      </span>
-      {bots.length} {bots.length === 1 ? "bot" : "bots"}
-    </span>
+      </div>
+    </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Why this preset (Info popover 2142:8352)                             */
-/* ------------------------------------------------------------------ */
+/* ---------- Key figures: solid rules with squares on the grid, values that keep counting ---------- */
 
-function WhyPreset({ market, venue }: { market: Market; venue: Venue }) {
-  const p = venue.preset ? PRESETS[venue.preset] : null;
-  const pair = `${market.coin}-USD`;
-  const volWhy = !p
-    ? "Doesn't matter while the book is this thin"
-    : venue.preset === "conservative"
-      ? `Big moves, so a wide ±${p.range}% range`
-      : venue.preset === "balanced"
-        ? `Medium moves, so a ±${p.range}% range`
-        : `Calm price, so a tight ±${p.range}% range`;
-  const depthWhy = venue.depth >= 1 ? "Deep enough for your size" : venue.depth >= 0.15 ? "Enough for a small bot" : "Too thin for a range bot";
-  const spreadWhy = venue.spread <= 0.02 ? "Cheap to trade" : venue.spread <= 0.06 ? "Fine for a range bot" : "Costly, eats into the fees you earn";
+function KeyFigures() {
+  const reduced = useReducedMotion();
+  const { scale } = useLive();
+  const [engines, setEngines] = useState({ n: 812, today: 12, k: 0 });
+  const [volume, setVolume] = useState({ n: 75.5, today: 1.92, k: 0 });
+  const [earn, setEarn] = useState({ n: 1302418, today: 1284.5, k: 0 });
+
+  useInterval(
+    () => {
+      const step = 0.3 + Math.random() * 7.7;
+      setEarn((e) => ({ n: e.n + step, today: e.today + step, k: e.k + 1 }));
+    },
+    1200,
+    !reduced,
+  );
+  useInterval(
+    () => {
+      const step = 0.004 + Math.random() * 0.03;
+      setVolume((v) => ({ n: v.n + step, today: v.today + step, k: v.k + 1 }));
+    },
+    2100,
+    !reduced,
+  );
+  useInterval(() => Math.random() < 0.45 && setEngines((e) => ({ n: e.n + 1, today: e.today + 1, k: e.k + 1 })), 5200, !reduced);
+
+  const exchanges = new Set(Object.values(SETUPS).map((s) => s.exchange)).size;
+  const markets = new Set(Object.values(SETUPS).map((s) => s.coin)).size;
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <span className="t-b16m">{p ? `Why ${p.name} for ${pair}` : `Why no preset for ${pair}`}</span>
-        <span className="t-b14 text-white/60">
-          {p
-            ? "We set the range from how much the price moved in the last 30 days, then check the market is deep enough for your bot."
-            : `On ${EXCHANGES[venue.exchange].name} this market is too thin for a range bot: fees and slippage would cost more than the bot earns.`}
+    <section className="relative grid grid-cols-5 border-y border-line" aria-label="Key figures">
+      <Figure label="Setups tracked" first>
+        <CountUp value={60} format={(n) => String(Math.round(n))} className="t-h36 tnum" />
+        <Up>4 new this week</Up>
+      </Figure>
+      <Figure label="Exchanges & markets">
+        <span className="flex gap-8">
+          <span className="flex flex-col">
+            <CountUp value={exchanges} format={(n) => String(Math.round(n))} className="t-h36 tnum" />
+            <span className="t-b14 text-white/30">exchanges</span>
+          </span>
+          <span className="flex flex-col">
+            <CountUp value={markets} format={(n) => String(Math.round(n))} className="t-h36 tnum" />
+            <span className="t-b14 text-white/30">markets</span>
+          </span>
         </span>
-      </div>
-      <div className="flex flex-col gap-3">
-        {[
-          ["Volatility · 30d", `${market.vol30}%`, volWhy],
-          ["Depth ±2%", fmtDepth(venue.depth), depthWhy],
-          ["Spread", fmtSpread(venue.spread), spreadWhy],
-        ].map(([l, val, w]) => (
-          <div key={l} className="flex flex-col gap-0.5">
-            <span className="flex items-center justify-between">
-              <span className="t-l12 text-white/40">{l}</span>
-              <span className="t-b14 tnum">{val}</span>
-            </span>
-            <span className="t-b14 text-white/60">{w}</span>
-          </div>
-        ))}
-      </div>
-      <span className="h-px bg-line" />
-      <span className="t-b14 text-white/60">Time in range: share of the last 30 days the price stayed inside this range. Est. yearly return comes from backtests and is not a promise.</span>
-      <span className="t-b14 text-white/40">Data from {EXCHANGES[venue.exchange].name}, refreshed every 5 minutes. Not financial advice.</span>
+      </Figure>
+      <Figure label="Liquidity engines live" live>
+        <Flash k={engines.k} dir="up" className="-mx-1.5 w-fit px-1.5">
+          <CountUp value={engines.n} format={(n) => Math.round(n).toLocaleString("en-US")} className="t-h36 tnum" />
+        </Flash>
+        <Up>{engines.today} since yesterday</Up>
+      </Figure>
+      <Figure label="Volume">
+        <Flash k={volume.k} dir="up" className="-mx-1.5 w-fit px-1.5">
+          <CountUp value={volume.n} format={(n) => `$${n.toFixed(1)}M`} className="t-h36 tnum" />
+        </Flash>
+        <Up>${volume.today.toFixed(2)}M today</Up>
+      </Figure>
+      <Figure label="Earnings" live>
+        <Flash k={earn.k} dir="up" className="-mx-1.5 w-fit bg-gain/12 px-1.5">
+          <CountUp value={earn.n} format={(n) => usd(n, 0)} className="t-h36 tnum text-gain" />
+        </Flash>
+        <span className="t-b14 tnum flex flex-wrap gap-x-3 text-white/60">
+          <span>APR {pct(29.8 * scale)}</span>
+          <span className="text-gain">▲ {usd(earn.today)} today</span>
+        </span>
+      </Figure>
+      {[0, 20, 40, 60, 80, 100].map((x) => (
+        <Fragment key={x}>
+          <GridSquare className="-top-[3.5px]" style={{ left: `calc(${x}% - 3px)` }} />
+          <GridSquare className="-bottom-[3.5px]" style={{ left: `calc(${x}% - 3px)` }} />
+        </Fragment>
+      ))}
+    </section>
+  );
+}
+
+function Figure({ label, live, first, children }: { label: string; live?: boolean; first?: boolean; children: ReactNode }) {
+  return (
+    <div className={cn("flex flex-col gap-2 px-5 py-5", !first && "border-l border-line")}>
+      <span className="t-l12 flex items-center gap-2 text-white/30">
+        {label}
+        {live && <LiveDot />}
+      </span>
+      {children}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Bits                                                                 */
-/* ------------------------------------------------------------------ */
+const Up = ({ children }: { children: ReactNode }) => <span className="t-b14 tnum text-gain">▲ {children}</span>;
 
-function Bars({ n }: { n: number }) {
+/* ---------- Category: header with averages and arrows, then a row of setup tiles (or a list) ---------- */
+
+type Row = { s: (typeof SETUPS)[string]; rank: number };
+
+function CategorySection({
+  cat,
+  rows,
+  layout,
+  filtered,
+  onReset,
+  onOpen,
+}: {
+  cat: Category;
+  rows: Row[];
+  layout: Layout;
+  filtered: boolean;
+  onReset: () => void;
+  onOpen: (id: string) => void;
+}) {
+  const live = useLive();
+  const strip = useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = useState({ start: true, end: true });
+
+  const avgApr = rows.length ? rows.reduce((t, r) => t + live.apr(r.s.id), 0) / rows.length : 0;
+  const steady = cat.id === "steady";
+  const avg2 = rows.length ? rows.reduce((t, r) => t + (steady ? r.s.inRange : r.s.exits), 0) / rows.length : 0;
+
+  const measure = useCallback(() => {
+    const el = strip.current;
+    if (!el) return setEdge({ start: true, end: true });
+    setEdge({ start: el.scrollLeft <= 2, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 2 });
+  }, []);
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure, rows.length, layout]);
+
+  const scrollBy = (dir: 1 | -1) => strip.current?.scrollBy({ left: dir * 2 * (TILE + TILE_GAP), behavior: "smooth" });
+
   return (
-    <span className="flex items-end gap-[2px]">
-      {[6, 9, 12].map((h, i) => (
-        <span key={h} className={cn("w-[3px] bg-current", i >= n && "opacity-25")} style={{ height: h }} />
-      ))}
+    <section aria-label={cat.name}>
+      <div className="relative flex items-end gap-6 border-b border-line pb-3">
+        <div className="flex w-[35%] min-w-[260px] items-center gap-3">
+          <CategoryIcon cat={cat} />
+          <h2 className="t-h18">{cat.name}</h2>
+          <InfoButton label={`About ${cat.name}`} tip={cat.info} />
+        </div>
+        <Avg label="Avg. APR">{rows.length ? <CountUp value={avgApr} format={pct} className="tnum" /> : "–"}</Avg>
+        <Avg label={cat.avg2Label}>{rows.length ? <CountUp value={avg2} format={(n) => (steady ? `${Math.round(n)}%` : n.toFixed(1))} className="tnum" /> : "–"}</Avg>
+        <span className="flex-1" />
+        {layout === "tiles" && (
+          <div className="flex gap-2">
+            <ArrowButton dir={-1} disabled={edge.start} onClick={() => scrollBy(-1)} />
+            <ArrowButton dir={1} disabled={edge.end} onClick={() => scrollBy(1)} />
+          </div>
+        )}
+        <GridSquare className="-bottom-[3.5px] -left-[3px]" />
+        <GridSquare className="-right-[3px] -bottom-[3.5px]" />
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyCategory
+          title={cat.empty && !filtered ? cat.empty.title : "No setup matches your filters"}
+          body={cat.empty && !filtered ? cat.empty.body : "Try another market or exchange, or reset the filters."}
+          onReset={filtered ? onReset : undefined}
+        />
+      ) : layout === "tiles" ? (
+        <div ref={strip} onScroll={measure} className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pt-4 pb-1">
+          {rows.map((r, i) => (
+            <SetupTile key={r.s.id} id={r.s.id} rank={r.rank} rankColor={cat.color} index={i} onOpen={onOpen} />
+          ))}
+        </div>
+      ) : (
+        <SetupList rows={rows} rankColor={cat.color} onOpen={onOpen} />
+      )}
+    </section>
+  );
+}
+
+function Avg({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="flex min-w-[96px] flex-col gap-0.5">
+      <span className="t-l12 text-white/30">{label}</span>
+      <span className="t-b16m">{children}</span>
     </span>
   );
 }
 
-function Depth({ seed }: { seed: number }) {
-  const bars = 24;
+function ArrowButton({ dir, disabled, onClick }: { dir: 1 | -1; disabled: boolean; onClick: () => void }) {
   return (
-    <div className="relative flex h-[96px] items-end gap-[2px]">
-      {Array.from({ length: bars }, (_, i) => {
-        const bid = i < bars / 2;
-        const d = bid ? bars / 2 - i : i - bars / 2 + 1;
-        const h = 18 + d * (60 / (bars / 2)) + ((seed * (i + 3)) % 13);
-        return <span key={i} className={cn("flex-1", bid ? "bg-gain/60" : "bg-error/60")} style={{ height: Math.min(96, h) }} />;
-      })}
-      <span className="absolute inset-y-0 left-1/2 w-px bg-white/60" />
+    <button
+      type="button"
+      aria-label={dir === 1 ? "Next setups" : "Previous setups"}
+      onClick={onClick}
+      disabled={disabled}
+      className="grid size-8 place-items-center border border-line text-white/70 transition-colors hover:bg-hover hover:text-white disabled:text-white/20 disabled:hover:bg-transparent"
+    >
+      <Icon name={dir === 1 ? "arrow-right" : "arrow-left"} size={16} />
+    </button>
+  );
+}
+
+function EmptyCategory({ title, body, onReset }: { title: string; body: string; onReset?: () => void }) {
+  return (
+    <div className="el-in relative mt-4 flex flex-col items-center gap-1.5 border border-line bg-card px-6 py-12 text-center">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="mb-1 text-white/30" aria-hidden>
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09Z" />
+        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2Z" />
+      </svg>
+      <p className="t-b16">{title}</p>
+      <p className="t-b14 text-white/30">{body}</p>
+      {onReset && (
+        <button type="button" onClick={onReset} className="t-b14 mt-2 text-white/80 underline-offset-4 hover:underline">
+          Reset filters
+        </button>
+      )}
+      <GridSquare className="-top-[3.5px] -left-[3.5px]" />
+      <GridSquare className="-top-[3.5px] -right-[3.5px]" />
+      <GridSquare className="-bottom-[3.5px] -left-[3.5px]" />
+      <GridSquare className="-right-[3.5px] -bottom-[3.5px]" />
     </div>
+  );
+}
+
+/* ---------- List view: the same setups as rows ---------- */
+
+const LIST_COLS = "grid grid-cols-[40px_minmax(220px,1.6fr)_1fr_0.8fr_1fr_1.3fr_0.8fr_0.7fr_0.7fr_112px_24px] items-center gap-3 px-4";
+
+function SetupList({ rows, rankColor, onOpen }: { rows: Row[]; rankColor: string; onOpen: (id: string) => void }) {
+  return (
+    <div className="mt-4 border border-line bg-card">
+      <div className={cn(LIST_COLS, "t-l12 h-10 border-b border-line text-white/30")}>
+        <span>#</span>
+        <span>Market</span>
+        <span className="text-right">APR</span>
+        <span className="text-right">7d</span>
+        <span>Entry</span>
+        <span>Range</span>
+        <span className="text-right">In range</span>
+        <span className="text-right">Exits</span>
+        <span className="text-right">Runtime</span>
+        <span>APR 30d</span>
+        <span />
+      </div>
+      {rows.map((r, i) => (
+        <ListRow key={r.s.id} row={r} index={i} last={i === rows.length - 1} rankColor={rankColor} onOpen={onOpen} />
+      ))}
+    </div>
+  );
+}
+
+function ListRow({ row, index, last, rankColor, onOpen }: { row: Row; index: number; last: boolean; rankColor: string; onOpen: (id: string) => void }) {
+  const { s, rank } = row;
+  const live = useLive();
+  const apr = live.apr(s.id);
+  const p = live.pulse(s.id);
+  const spark = useMemo(() => sparkSeries(s), [s]);
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(s.id)}
+      style={{ "--i": index } as CSSProperties}
+      className={cn(LIST_COLS, "el-in group t-b14 tnum h-14 w-full text-left transition-colors hover:bg-hover", !last && "border-b border-white/6")}
+    >
+      <span className="t-l12" style={{ color: rankColor }}>
+        #{rank}
+      </span>
+      <span className="flex min-w-0 items-center gap-2">
+        <AssetIcon coin={s.coin} size={20} />
+        <span className="t-b16m">{s.coin}-USD</span>
+        {s.hot && <HotTag small />}
+        <ExchangeCode code={EXCHANGE_CODE[s.exchange]} />
+      </span>
+      <span className="flex justify-end">
+        <Flash k={p?.k ?? 0} dir={p?.dir ?? null} className="t-b16m -mx-1.5 px-1.5">
+          <CountUp value={apr} format={pct} className="text-gain" />
+        </Flash>
+      </span>
+      <span className={cn("text-right", s.d7 >= 0 ? "text-gain" : "text-error")}>{signed(s.d7)}</span>
+      <EntryLabel entry={s.entry} />
+      <span className="text-white/60">
+        {priceFmt(s.lo)} – {priceFmt(s.hi)}
+      </span>
+      <span className="text-right">{s.inRange}%</span>
+      <span className="text-right">{s.exits}</span>
+      <span className="text-right">{s.runtime}d</span>
+      <PerfChart values={spark} width={112} height={28} negative={s.spark === "dip"} strokeWidth={1} marker={4} />
+      <Icon name="chevron-right" size={16} className="text-white/30 transition-transform group-hover:translate-x-0.5 group-hover:text-white/70" />
+    </button>
   );
 }
