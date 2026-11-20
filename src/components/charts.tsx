@@ -244,45 +244,75 @@ export function BarChart({
 }
 
 /** Greyscale donut (Exchange allocation). */
-export function Donut({ segments, size = 216, center }: { segments: { value: number; shade: string; label: string; labelDark?: boolean }[]; size?: number; center: ReactNode }) {
+/** Thin-ring donut. Percentages live in the legend; hovering a segment (or its legend row via `active`) names it in the center. */
+export function Donut({
+  segments,
+  size = 216,
+  thickness = 20,
+  center,
+  active,
+  onActive,
+}: {
+  segments: { value: number; shade: string; label: string; name?: string }[];
+  size?: number;
+  thickness?: number;
+  center: ReactNode;
+  active?: number | null;
+  onActive?: (i: number | null) => void;
+}) {
+  const [hoverSelf, setHoverSelf] = useState<number | null>(null);
+  const hover = active ?? hoverSelf;
+  const setHover = (i: number | null) => {
+    setHoverSelf(i);
+    onActive?.(i);
+  };
   const total = segments.reduce((a, s) => a + s.value, 0);
   const R = size / 2;
-  const r = R * 0.39;
+  const r = R - thickness;
   const arcs = useMemo(() => {
     let a0 = 0;
+    const single = segments.length === 1;
     return segments.map((s) => {
       const a1 = a0 + (s.value / total) * Math.PI * 2;
-      const gap = 0.012;
+      // ~2px gap between segments, whatever the radius.
+      const gap = single ? 0 : 1 / R;
       const p = (a: number, rad: number) => [R + rad * Math.sin(a), R - rad * Math.cos(a)];
+      const end = single ? a1 - 0.0001 : a1 - gap;
       const [x0, y0] = p(a0 + gap, R);
-      const [x1, y1] = p(a1 - gap, R);
-      const [x2, y2] = p(a1 - gap, r);
+      const [x1, y1] = p(end, R);
+      const [x2, y2] = p(end, r);
       const [x3, y3] = p(a0 + gap, r);
       const large = a1 - a0 > Math.PI ? 1 : 0;
-      const mid = (a0 + a1) / 2;
-      const [lx, ly] = p(mid, (R + r) / 2);
       const d = `M${x0} ${y0}A${R} ${R} 0 ${large} 1 ${x1} ${y1}L${x2} ${y2}A${r} ${r} 0 ${large} 0 ${x3} ${y3}Z`;
       a0 = a1;
-      return { d, lx, ly, s };
+      return { d, s };
     });
   }, [segments, total, R, r]);
+  const hovered = hover != null ? segments[hover] : null;
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative" style={{ width: size, height: size }} onMouseLeave={() => setHover(null)}>
       <svg width={size} height={size} aria-hidden>
-        {arcs.map(({ d, s }) => (
-          <path key={s.label} d={d} fill={s.shade} />
+        {arcs.map(({ d, s }, i) => (
+          <path
+            key={i}
+            d={d}
+            fill={s.shade}
+            onMouseEnter={() => setHover(i)}
+            className="transition-opacity duration-150"
+            style={{ opacity: hover == null || hover === i ? 1 : 0.25 }}
+          />
         ))}
       </svg>
-      {arcs.map(({ lx, ly, s }) => (
-        <span
-          key={s.label}
-          className={cn("absolute -translate-x-1/2 -translate-y-1/2 text-[12px] leading-[15px] font-medium", s.labelDark ? "text-black" : "text-white")}
-          style={{ left: lx, top: ly }}
-        >
-          {s.label}
-        </span>
-      ))}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-center">{center}</div>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-center">
+        {hovered ? (
+          <>
+            <span className="tnum text-[18px] leading-[27px] font-medium">{hovered.label}</span>
+            {hovered.name && <span className="text-[12px] leading-[15px] font-medium text-white/55">{hovered.name}</span>}
+          </>
+        ) : (
+          center
+        )}
+      </div>
     </div>
   );
 }

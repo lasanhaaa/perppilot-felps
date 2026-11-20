@@ -42,7 +42,7 @@ export default function AccountsPage() {
         title="Accounts"
         description="The exchange accounts your bots trade on."
         actions={
-          <Button variant="white" href="/setup?from=accounts" className="h-12 px-[27px]" iconLeft={<Icon name="plus" size={20} />}>
+          <Button variant="white" size="sm" href="/setup?from=accounts" iconLeft={<Icon name="plus" size={16} />}>
             Add account
           </Button>
         }

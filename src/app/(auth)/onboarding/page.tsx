@@ -44,10 +44,10 @@ export default function OnboardingPage() {
   }[step]!;
 
   return (
-    <div key={step} className={cn("flex flex-col gap-12", dir === "next" ? "anim-step-next" : "anim-step-back")}>
-      <div className="flex flex-col gap-3">
+    // Kept compact so every question fits a laptop screen without scrolling (felipe 2026-11-20).
+    <div key={step} className={cn("flex flex-col gap-7", dir === "next" ? "anim-step-next" : "anim-step-back")}>
+      <div className="flex flex-col gap-6">
         <StepProgress step={step} />
-        <div className="h-5" />
         <AuthHeading title={heading.t} description={heading.d} />
       </div>
 
@@ -62,20 +62,19 @@ export default function OnboardingPage() {
                 onClick={() => pick(s.label)}
                 style={{ "--i": i } as React.CSSProperties}
                 className={cn(
-                  "tile-in flex h-[104px] flex-col items-center justify-center gap-3 rounded-sm border px-3 py-4 text-center transition-colors",
+                  "tile-in flex h-14 items-center gap-2.5 rounded-sm border px-3 text-left transition-colors",
                   on ? "border-brand bg-selected" : "border-line bg-raised hover:bg-hover",
                 )}
               >
-                <span className="flex size-8 items-center justify-center rounded-sm bg-raised">
-                  <Icon name={s.icon} size={20} />
-                </span>
-                <span className="text-[14px] leading-[21px] font-medium">{s.label}</span>
+                <Icon name={s.icon} size={18} className={cn("flex-none", on ? "text-brand" : "text-white/70")} />
+                <span className="text-[13px] leading-4 font-medium">{s.label}</span>
               </button>
             );
           })}
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        // Knowledge stays a list (it is a scale); the capital ranges are short, so two columns.
+        <div className={step === 2 ? "flex flex-col gap-1.5" : "grid grid-cols-2 gap-2"}>
           {(step === 2 ? KNOWLEDGE : CAPITAL).map((o, i) => {
             const on = a[step] === o;
             return (
@@ -85,19 +84,20 @@ export default function OnboardingPage() {
                 onClick={() => pick(o)}
                 style={{ "--i": i } as React.CSSProperties}
                 className={cn(
-                  "tile-in t-b16 flex h-[58px] items-center justify-between gap-3 rounded-sm border px-[18px] text-left transition-colors",
+                  "tile-in flex items-center justify-between gap-3 rounded-sm border px-4 text-left transition-colors",
+                  step === 2 ? "t-b16 h-11" : "h-12 text-[15px] leading-5",
                   on ? "border-brand bg-selected" : "border-line bg-raised hover:bg-hover",
                 )}
               >
                 {o}
-                {on && <Icon name="check" size={20} className="anim-fade text-brand" />}
+                {on && <Icon name="check" size={18} className="anim-fade flex-none text-brand" />}
               </button>
             );
           })}
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         {step === 1 ? (
           <Button onClick={next} disabled={!a[1]}>
             Weiter
