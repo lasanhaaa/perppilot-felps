@@ -17,8 +17,8 @@ import type { MotionStateId } from "@/lib/bot-motion";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { formatUptime, liveFill, useLiveBot, useLiveFills, type LiveFill, type LiveSnap } from "@/lib/live-bots";
 import { Cents, LiveDot, LiveNumber } from "@/components/live/live-number";
-import { ChartModeSwitch, LiveBadge, LiveChart, isTradeMode, toCandles, useChartMode } from "@/components/live/live-charts";
-import { TradeChart } from "@/components/live/trade-charts";
+import { LiveBadge, LiveChart } from "@/components/live/live-charts";
+import { CrosshairChart } from "@/components/live/crosshair-chart";
 import { CoinIcon } from "@/components/ui/coin";
 import { EXCHANGES } from "@/components/ui/exchange-logo";
 import { Icon } from "@/components/ui/icons";
@@ -336,7 +336,6 @@ function SimpleView({
   const live = useLiveBot(bot, "focus");
   // "Live" (5-second P&L candles, moving) first: the page should look like the bot is working.
   const [period, setPeriod] = useState<"Live" | "1D" | "7D" | "30D" | "All">("Live");
-  const [chart, setChart] = useChartMode();
   const fees = bot.netFees + live.fees;
   const equity = bot.equity + live.equity;
   const startPct = n.start ? ((equity - n.start) / n.start) * 100 : 0;
@@ -438,10 +437,9 @@ function SimpleView({
         <section className="flex min-h-[369px] flex-col gap-5 rounded-sm border border-line bg-card p-5">
           <div className="flex items-center justify-between gap-3">
             <span className="whitespace-nowrap">
-              <Eyebrow>{period === "Live" ? (chart === "lines" ? "Net fees · each trade" : isTradeMode(chart) ? "Fee per trade" : "Live P&L · 5s") : "Earnings over time"}</Eyebrow>
+              <Eyebrow>{period === "Live" ? "Net fees · each trade" : "Earnings over time"}</Eyebrow>
             </span>
             <div className="flex items-center gap-2">
-              <ChartModeSwitch value={chart} onChange={setChart} compact />
               <div className="flex border border-line p-1">
                 {(["Live", "1D", "7D", "30D", "All"] as const).map((p) => (
                   <button key={p} type="button" onClick={() => setPeriod(p)} className={cn("t-b14 flex h-[29px] items-center gap-1.5 px-3", p === period ? "bg-white text-black" : "text-white/50 hover:text-white/80")}>
@@ -452,9 +450,8 @@ function SimpleView({
               </div>
             </div>
           </div>
-          {period === "Live" && isTradeMode(chart) ? (
-            <TradeChart
-              style={chart}
+          {period === "Live" ? (
+            <CrosshairChart
               fees={live.tradeFees}
               cum={live.tradeCum}
               k={live.k}
@@ -464,32 +461,8 @@ function SimpleView({
               axis
               format={fmtMoney}
             />
-          ) : period === "Live" ? (
-            <LiveChart
-              candles={live.pnl}
-              mode={chart}
-              bucket={live.bucket}
-              hitK={live.k}
-              height={260}
-              format={(v) => `${v < 0 ? "-" : ""}$${money(Math.abs(v))}`}
-              tooltipLabel="Net P&L: fees plus position"
-            />
           ) : values.length > 1 ? (
-            chart === "candles" ? (
-              <LiveChart
-                key={period}
-                candles={toCandles(values)}
-                mode="candles"
-                bucket={0}
-                hitK={live.k}
-                height={260}
-                slots={Math.max(8, values.length - 1)}
-                format={(v) => `$${Math.round(v)}`}
-                timeLabel={(ago) => (ago === 0 ? "Today" : dayLabel(ago))}
-                tooltipLabel="Net fees since start"
-              />
-            ) : (
-              <AreaChart
+            <AreaChart
                 key={period}
                 values={values}
                 labels={values.map((_, i) => dayLabel(values.length - 1 - i))}
@@ -504,7 +477,6 @@ function SimpleView({
                   </div>
                 )}
               />
-            )
           ) : (
             <EmptyState
               bordered={false}
@@ -737,7 +709,6 @@ function PointMarketsCard({ bot }: { bot: Bot }) {
 function AdvancedView({ bot }: { bot: Bot }) {
   const n = useBotNumbers(bot);
   const live = useLiveBot(bot, "focus");
-  const [chart, setChart] = useChartMode();
   const [tab, setTab] = useState<"market" | "fees" | "equity" | "volume">("market");
   const [tf, setTf] = useState("Live");
   const fees = bot.netFees + live.fees;
@@ -862,7 +833,6 @@ function AdvancedView({ bot }: { bot: Bot }) {
           </div>
           {tab === "market" && (
             <div className="flex items-center gap-3">
-              <ChartModeSwitch value={chart} onChange={setChart} className="rounded-sm" compact />
               <div className="flex gap-1.5">
                 {["Live", "1m", "5m", "15m", "1h", "4h", "1d"].map((t) => (
                   <button
@@ -883,7 +853,7 @@ function AdvancedView({ bot }: { bot: Bot }) {
           tf === "Live" ? (
             <>
               <div className="flex items-center gap-4 pb-4">
-                {live.running && <LiveBadge label="Live · 5s candles" />}
+                {live.running && <LiveBadge label="Live · 5s" />}
                 <span className="t-l12 flex items-center gap-1.5 text-white/40">
                   <span className="size-1.5 bg-gain" /> Buy filled
                 </span>
@@ -894,7 +864,7 @@ function AdvancedView({ bot }: { bot: Bot }) {
               <LiveChart
                 candles={live.priceCandles}
                 marks={live.marks}
-                mode={chart === "candles" ? "candles" : "line"}
+                mode="line"
                 bucket={live.bucket}
                 hitK={live.k}
                 height={520}
@@ -903,18 +873,6 @@ function AdvancedView({ bot }: { bot: Bot }) {
                 refLine={{ value: n.avgEntry, label: `ENTRY ${money(n.avgEntry, 0)}` }}
               />
             </>
-          ) : chart === "candles" ? (
-            <LiveChart
-              key={tf}
-              candles={toCandles(entrySeries(n.seed + tf.length * 13, n.avgEntry), 4)}
-              mode="candles"
-              bucket={0}
-              height={564}
-              slots={40}
-              format={(v) => money(v, 0)}
-              refLine={{ value: n.avgEntry, label: `ENTRY ${money(n.avgEntry, 0)}` }}
-              timeLabel={(ago) => dayLabel(Math.round(ago / 2))}
-            />
           ) : (
             <EntryLineChart key={tf} seed={n.seed + tf.length * 13} entry={n.avgEntry} />
           )

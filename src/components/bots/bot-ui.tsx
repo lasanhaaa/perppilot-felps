@@ -13,8 +13,8 @@ import { EXCHANGES, ExchangeGlyph, type ExchangeId } from "@/components/ui/excha
 import { Icon } from "@/components/ui/icons";
 import { formatUptime, useLiveBot } from "@/lib/live-bots";
 import { Cents, LiveDot, LiveNumber } from "@/components/live/live-number";
-import { LiveSpark, isTradeMode, type ChartMode } from "@/components/live/live-charts";
-import { TradeChart } from "@/components/live/trade-charts";
+import { LiveSpark } from "@/components/live/live-charts";
+import { CrosshairChart } from "@/components/live/crosshair-chart";
 
 /* ---------- Status pill (no glyphs: status is the tag alone) ---------- */
 
@@ -91,7 +91,6 @@ export function BotCard({
   motion,
   playKey,
   live = true,
-  chart = "line",
   index = 0,
 }: {
   bot: Bot;
@@ -103,8 +102,6 @@ export function BotCard({
   playKey?: number;
   /** Live numbers, chart and clock (off for static previews). */
   live?: boolean;
-  /** Line or candles for the card chart. */
-  chart?: ChartMode;
   /** Position in the grid, for the staggered entrance. */
   index?: number;
 }) {
@@ -172,11 +169,7 @@ export function BotCard({
           </div>
         </div>
         <div className="el-area" style={{ animationDelay: `${delay + 200}ms` }}>
-          {isTradeMode(chart) ? (
-            <TradeChart style={chart} fees={l.tradeFees} cum={l.tradeCum} k={l.k} dir={l.dir} height={64} slots={24} />
-          ) : (
-            <LiveSpark candles={l.pnl} mode={chart} bucket={l.bucket} hitK={l.k} hitDir={l.dir} negative={netFees < 0} height={64} />
-          )}
+          <CrosshairChart fees={l.tradeFees} cum={l.tradeCum} k={l.k} dir={l.dir} height={64} slots={24} />
         </div>
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-0.5">
