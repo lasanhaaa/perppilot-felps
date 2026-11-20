@@ -159,7 +159,9 @@ export function BotCard({
 
 /* ---------- Table ("Your bots") ---------- */
 
-export const BOT_COLS = "grid grid-cols-[300px_260px_200px_150px_160px_130px_minmax(120px,1fr)] items-center px-5";
+/** Columns shrink down to their minimum on smaller screens (laptops); past that the table scrolls inside its card. */
+export const BOT_COLS =
+  "grid grid-cols-[minmax(210px,300px)_minmax(150px,260px)_minmax(130px,200px)_minmax(90px,150px)_minmax(90px,160px)_minmax(70px,130px)_minmax(120px,1fr)] items-center px-5";
 
 export function BotTableHeader() {
   return (

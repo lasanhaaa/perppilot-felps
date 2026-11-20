@@ -74,7 +74,7 @@ export default function BotsPage() {
         title="Bot Overview"
         description="Your grouped bots, organized by what they actually do."
         actions={
-          <Button variant="white" href="/create-bot" className="h-12 px-[27px]" iconLeft={<Icon name="add-diamond" size={24} />}>
+          <Button variant="white" size="sm" href="/create-bot" iconLeft={<Icon name="add-diamond" size={16} />}>
             New bot
           </Button>
         }

@@ -168,7 +168,7 @@ function FirstAccessOverview() {
             </div>
             {account ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-6">
-                <Donut segments={[{ value: 1, shade: "#ffffff", label: "100%", labelDark: true }]} size={168} center={<span className="t-h18">{usd(account.available)}</span>} />
+                <Donut segments={[{ value: 1, shade: EXCHANGES[account.exchange].color, label: "100%", name: EXCHANGES[account.exchange].name }]} size={168} thickness={16} center={<span className="t-h18">{usd(account.available)}</span>} />
                 <div className="flex w-full items-center gap-3.5">
                   <ExchangeLogo id={account.exchange} size={24} />
                   <span className="t-b14 flex-1">{EXCHANGES[account.exchange].name}</span>
@@ -240,7 +240,8 @@ function RunningOverview() {
     .filter((r) => r.value > 0)
     .sort((a, b) => b.value - a.value);
   const exTotal = byExchange.reduce((s, r) => s + r.value, 0);
-  const SHADES = ["#ffffff", "rgba(255,255,255,.55)", "rgba(255,255,255,.22)", "rgba(255,255,255,.1)"];
+  const SHADES = ["#ffffff", "rgba(255,255,255,.4)"];
+  const [hoverSeg, setHoverSeg] = useState<number | null>(null);
   const byType = [
     { key: "V3 Bots", value: allBots.filter((b) => b.type === "v3").reduce((s, b) => s + b.equity, 0), bots: allBots.filter((b) => b.type === "v3").length },
     { key: "PointBots", value: allBots.filter((b) => b.type === "point").reduce((s, b) => s + b.equity, 0), bots: allBots.filter((b) => b.type === "point").length },
@@ -267,7 +268,7 @@ function RunningOverview() {
               onChange={setPeriod}
               options={(["7D", "30D", "90D", "All"] as Period[]).map((p) => ({ value: p, label: p }))}
             />
-            <Button variant="white" href={hasProfile ? "/create-bot" : "/setup"} className="h-12 px-[27px]" iconLeft={<Icon name="add-diamond" size={24} />}>
+            <Button variant="white" size="sm" href={hasProfile ? "/create-bot" : "/setup"} iconLeft={<Icon name="add-diamond" size={16} />}>
               New bot
             </Button>
           </div>
@@ -335,7 +336,7 @@ function RunningOverview() {
                 );
               }}
             />
-            <div className="relative -mx-5 mt-1 border-t border-line">
+            <div className="relative -mx-5 mt-auto border-t border-line">
               <div ref={strip} className="no-scrollbar flex overflow-x-auto">
                 <AccountFilter active={account === "all"} onClick={() => setAccount("all")}>
                   <span className="flex items-center gap-2">
@@ -382,13 +383,15 @@ function RunningOverview() {
           <section className="flex flex-col gap-5 rounded-sm border border-line bg-card p-5">
             <div className="flex items-center justify-between">
               <span className="t-b14">{split === "exchange" ? "Exchange" : "Bot type"}</span>
-              <Segmented size="sm" value={split} onChange={setSplit} options={[{ value: "exchange", label: "Exchange" }, { value: "type", label: "Bot type" }]} />
+              <Segmented size="sm" value={split} onChange={(v) => { setSplit(v); setHoverSeg(null); }} options={[{ value: "exchange", label: "Exchange" }, { value: "type", label: "Bot type" }]} />
             </div>
             <div className="flex justify-center">
               {split === "exchange" ? (
                 <Donut
                   key="ex"
-                  segments={byExchange.map((r, i) => ({ value: r.value, shade: SHADES[i] ?? SHADES[3], label: `${Math.round((r.value / exTotal) * 100)}%`, labelDark: i < 2 }))}
+                  segments={byExchange.map((r) => ({ value: r.value, shade: EXCHANGES[r.ex].color, label: `${Math.round((r.value / exTotal) * 100)}%`, name: EXCHANGES[r.ex].name }))}
+                  active={hoverSeg}
+                  onActive={setHoverSeg}
                   center={
                     <>
                       <span className="tnum text-[18px] leading-[27px] font-medium">{usd(exTotal)}</span>
@@ -399,7 +402,9 @@ function RunningOverview() {
               ) : (
                 <Donut
                   key="type"
-                  segments={byType.map((r, i) => ({ value: r.value, shade: SHADES[i], label: `${Math.round((r.value / typeTotal) * 100)}%`, labelDark: i < 2 }))}
+                  segments={byType.map((r, i) => ({ value: r.value, shade: SHADES[i], label: `${Math.round((r.value / typeTotal) * 100)}%`, name: r.key }))}
+                  active={hoverSeg}
+                  onActive={setHoverSeg}
                   center={
                     <>
                       <span className="tnum text-[18px] leading-[27px] font-medium">{usd(typeTotal)}</span>
@@ -416,6 +421,9 @@ function RunningOverview() {
                       key={r.ex}
                       last={i === byExchange.length - 1}
                       icon={<ExchangeLogo id={r.ex} size={24} />}
+                      swatch={EXCHANGES[r.ex].color}
+                      dim={hoverSeg != null && hoverSeg !== i}
+                      onHover={(on) => setHoverSeg(on ? i : null)}
                       name={EXCHANGES[r.ex].name}
                       bots={r.bots}
                       pct={(r.value / exTotal) * 100}
@@ -427,6 +435,8 @@ function RunningOverview() {
                       key={r.key}
                       last={i === byType.length - 1}
                       icon={<span className="size-6 border border-white/20" style={{ background: SHADES[i] }} />}
+                      dim={hoverSeg != null && hoverSeg !== i}
+                      onHover={(on) => setHoverSeg(on ? i : null)}
                       name={r.key}
                       bots={r.bots}
                       pct={(r.value / typeTotal) * 100}
@@ -531,7 +541,7 @@ function RunningOverview() {
             </span>
           </div>
           {view === "list" ? (
-            <div>
+            <div className="overflow-x-auto">
               <BotTableHeader />
               {top.map((b, i) => (
                 <BotTableRow key={b.id} bot={b} last={i === top.length - 1} />
@@ -584,9 +594,34 @@ function AccountFilter({ active, onClick, children }: { active: boolean; onClick
   );
 }
 
-function LegendRow({ icon, name, bots, pct, value, last }: { icon: ReactNode; name: string; bots: number; pct: number; value: number; last?: boolean }) {
+function LegendRow({
+  icon,
+  swatch,
+  name,
+  bots,
+  pct,
+  value,
+  last,
+  dim,
+  onHover,
+}: {
+  icon: ReactNode;
+  swatch?: string;
+  name: string;
+  bots: number;
+  pct: number;
+  value: number;
+  last?: boolean;
+  dim?: boolean;
+  onHover?: (on: boolean) => void;
+}) {
   return (
-    <div className={cn("flex h-[45px] items-center gap-3.5", !last && "border-b border-white/6")}>
+    <div
+      onMouseEnter={() => onHover?.(true)}
+      onMouseLeave={() => onHover?.(false)}
+      className={cn("flex h-[45px] items-center gap-3.5 transition-opacity duration-150", !last && "border-b border-white/6", dim && "opacity-40")}
+    >
+      {swatch && <span className="-mr-1.5 size-2 flex-none" style={{ background: swatch }} />}
       {icon}
       <span className="t-b14 flex-1">{name}</span>
       <span className="t-b14 w-10 text-right text-white/50">

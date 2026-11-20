@@ -80,7 +80,7 @@ export function LeaderboardView({ scope }: { scope: LeaderScope }) {
         title="Leaderboard"
         description="Top PerpPilot traders, ranked by net P&L."
         actions={
-          <Button variant="white" href={createHref} className="h-12 px-[27px]" iconLeft={<Icon name="add-diamond" size={24} />}>
+          <Button variant="white" size="sm" href={createHref} iconLeft={<Icon name="add-diamond" size={16} />}>
             New bot
           </Button>
         }
