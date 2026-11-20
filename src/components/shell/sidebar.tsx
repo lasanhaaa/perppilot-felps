@@ -7,7 +7,9 @@ import { useStore } from "@/lib/store";
 import { Icon, Logo, type IconName } from "@/components/ui/icons";
 
 /** Menu component "menu" (2086:5659), variant per active page. */
-type Item = { href: string; label: string; icon: IconName; match: (p: string) => boolean; soon?: boolean };
+type Item = { href: string; label: string; icon: IconName; match: (p: string) => boolean; soon?: boolean; sub?: Sub[] };
+/** Side Menu / Sublink (2309:17055): shown under its link while that section is open. */
+type Sub = { href: string; label: string; match: (p: string) => boolean };
 
 const PLATFORM: Item[] = [
   { href: "/overview", label: "Overview", icon: "chart", match: (p) => p.startsWith("/overview") },
@@ -18,7 +20,19 @@ const PLATFORM: Item[] = [
   { href: "#", label: "Points", icon: "asterisk", match: () => false, soon: true },
 ];
 const TOOLS: Item[] = [{ href: "/explore", label: "Explore Liquidity", icon: "droplet", match: (p) => p.startsWith("/explore") }];
-const SOCIAL: Item[] = [{ href: "https://discord.com", label: "Discord", icon: "bot", match: () => false }];
+const SOCIAL: Item[] = [
+  {
+    href: "/leaderboard",
+    label: "Leaderboard",
+    icon: "trophy",
+    match: (p) => p.startsWith("/leaderboard"),
+    sub: [
+      { href: "/leaderboard", label: "Seasonal", match: (p) => p === "/leaderboard" },
+      { href: "/leaderboard/global", label: "Global", match: (p) => p.startsWith("/leaderboard/global") },
+    ],
+  },
+  { href: "https://discord.com", label: "Discord", icon: "bot", match: () => false },
+];
 
 function Group({ title, items, path }: { title: string; items: Item[]; path: string }) {
   return (
@@ -27,7 +41,7 @@ function Group({ title, items, path }: { title: string; items: Item[]; path: str
       <div className="flex flex-col px-2">
         {items.map((it) => {
           const active = it.match(path);
-          return (
+          const link = (
             <Link
               key={it.label}
               href={it.href}
@@ -43,6 +57,25 @@ function Group({ title, items, path }: { title: string; items: Item[]; path: str
               <span className={cn("t-b14 flex-1 tracking-[-0.02em]", active ? "font-medium text-white" : "text-white/70")}>{it.label}</span>
               {it.soon && <span className="t-l12 bg-coming px-1 tracking-normal text-black">Coming soon</span>}
             </Link>
+          );
+          if (!it.sub || !active) return link;
+          return (
+            <div key={it.label} className="flex flex-col">
+              {link}
+              <div className="flex flex-col py-1">
+                {it.sub.map((s) => {
+                  const on = s.match(path);
+                  return (
+                    <Link key={s.href} href={s.href} className="group/sub flex h-8 items-stretch gap-[17px] pl-[17px]">
+                      <span className={cn("w-0.5 flex-none transition-colors", on ? "bg-white" : "bg-white/10 group-hover/sub:bg-white/30")} />
+                      <span className={cn("t-b14 flex items-center tracking-[-0.02em] transition-colors", on ? "text-white" : "text-white/60 group-hover/sub:text-white/80")}>
+                        {s.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>
