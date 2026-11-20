@@ -405,7 +405,8 @@ export function MotionAvatar({
       const nodAt = (y: number) => {
         const th = Math.asin(clamp((y - fy) / R, -0.97, 0.97));
         const th2 = clamp(th + pitch, -1.45, 1.45);
-        return { dy: R * (Math.sin(th2) - Math.sin(th)), hf: Math.max(0.001, Math.cos(th2) / Math.cos(th)) };
+        // Half the true foreshortening: the eyes keep their shape and still read as turned.
+        return { dy: R * (Math.sin(th2) - Math.sin(th)), hf: 1 - 0.5 * (1 - Math.max(0, Math.cos(th2) / Math.cos(th))) };
       };
       // The eyes never leave the head: up and down, the slide eases into the room the head has.
       // Small moves pass untouched; past 60% of the room they ease in and never reach the edge.
