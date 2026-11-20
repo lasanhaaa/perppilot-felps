@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/lib/store";
 import { DEMO_BOTS, money, signedUsd, usd, type Bot } from "@/lib/mock";
@@ -14,6 +14,9 @@ import { AreaChart, BarChart, Donut } from "@/components/charts";
 import { BotCard, BotFace, BotTableHeader, BotTableRow, ExchangeTag, PairLine, StatusPill } from "@/components/bots/bot-ui";
 import { useGridMoments } from "@/components/bots/bot-motion-state";
 import { UseBotModal } from "@/components/bots/use-bot-modal";
+import { useLiveBot, type Dir, type LiveSnap } from "@/lib/live-bots";
+import { Cents, LiveNumber } from "@/components/live/live-number";
+import { LiveBadge } from "@/components/live/live-charts";
 
 export default function OverviewPage() {
   const { state } = useStore();
@@ -203,6 +206,59 @@ function FirstAccessOverview() {
 
 const ACCOUNT_COLOR = ["#4ade80", "#2f9aff", "#d6d4d6", "#6b6b70", "#B79CFF"];
 
+/*
+ * Live Overview: every bot runs in the shared engine (src/lib/live-bots.ts, same numbers as the Bot
+ * pages). A hidden reporter per bot passes its snapshot up; the page sums them into the totals,
+ * accounts, exchanges, today's bar and the end of the Performance chart. Fees and equity move on
+ * fills (with a green or red flash), the open positions' mark-to-market moves every second.
+ */
+type LiveBit = { fees: number; equity: number; mtm: number; trades: number; k: number; dir: Dir };
+type Pulse = { k: number; dir: Dir };
+
+function LiveReporter({ bot, onSnap }: { bot: Bot; onSnap: (id: string, s: LiveSnap, bot: Bot) => void }) {
+  const s = useLiveBot(bot);
+  useEffect(() => onSnap(bot.id, s, bot), [s, bot, onSnap]);
+  return null;
+}
+
+function useLiveOverview(bots: Bot[]) {
+  const [bits, setBits] = useState<Record<string, LiveBit>>({});
+  const onSnap = useCallback((id: string, s: LiveSnap, bot: Bot) => {
+    const last = s.pnl[s.pnl.length - 1]?.c ?? bot.netFees;
+    // Open position's price move: P&L minus the fees earned.
+    const mtm = s.running ? last - bot.netFees - s.fees : 0;
+    setBits((p) => {
+      const cur = p[id];
+      if (cur && cur.k === s.k && Math.abs(cur.mtm - mtm) < 0.005) return p;
+      return { ...p, [id]: { fees: s.fees, equity: s.equity, mtm, trades: s.trades, k: s.k, dir: s.dir } };
+    });
+  }, []);
+  // One pulse for the whole page and one per group, bumped on each fill.
+  const seen = useRef<Record<string, number>>({});
+  const [pulse, setPulse] = useState<{ all: Pulse; by: Record<string, Pulse> }>({ all: { k: 0, dir: null }, by: {} });
+  useEffect(() => {
+    const fresh = Object.entries(bits).filter(([id, b]) => b.k > (seen.current[id] ?? 0));
+    if (!fresh.length) return;
+    fresh.forEach(([id, b]) => (seen.current[id] = b.k));
+    setPulse((p) => {
+      const by = { ...p.by };
+      let dir: Dir = p.all.dir;
+      for (const [id, b] of fresh) {
+        const bot = bots.find((x) => x.id === id);
+        dir = b.dir;
+        if (!bot) continue;
+        for (const key of [`acc:${bot.exchange}:${bot.account}`, `ex:${bot.exchange}`, `type:${bot.type}`, `bot:${id}`])
+          by[key] = { k: (by[key]?.k ?? 0) + 1, dir: b.dir };
+      }
+      return { all: { k: p.all.k + fresh.length, dir }, by };
+    });
+  }, [bits, bots]);
+  const sum = (pick: (b: Bot) => boolean, f: (x: LiveBit) => number) =>
+    bots.reduce((a, b) => (pick(b) && bits[b.id] ? a + f(bits[b.id]) : a), 0);
+  const reporters = bots.map((b) => <LiveReporter key={b.id} bot={b} onSnap={onSnap} />);
+  return { bits, pulse, sum, reporters };
+}
+
 function RunningOverview() {
   const { allBots, allAccounts, hasProfile } = useStore();
   const [period, setPeriod] = useState<Period>("30D");
@@ -212,13 +268,21 @@ function RunningOverview() {
   const [view, setView] = useState<"list" | "grid">("list");
   const strip = useRef<HTMLDivElement>(null);
 
-  const totalEquity = allBots.reduce((a, b) => a + b.equity, 0) + 0.36;
-  const totalEarned = allBots.reduce((a, b) => a + b.earned, 0);
-  const change = PERIOD_CHANGE[period];
+  const live = useLiveOverview(allBots);
+  const all = () => true;
+  const liveFees = live.sum(all, (x) => x.fees);
+  const liveEquity = live.sum(all, (x) => x.equity + x.mtm);
+  const liveTrades = live.sum(all, (x) => x.trades);
+  const pulseOf = (key: string): Pulse => live.pulse.by[key] ?? { k: 0, dir: null };
+
+  const totalEquity = allBots.reduce((a, b) => a + b.equity, 0) + 0.36 + liveEquity;
+  const totalEarned = allBots.reduce((a, b) => a + b.earned, 0) + liveFees;
+  const change = { usd: PERIOD_CHANGE[period].usd + liveEquity, pct: PERIOD_CHANGE[period].pct };
 
   const accountRows = allAccounts.map((a, i) => ({
     ...a,
-    value: a.equity ?? a.available,
+    value: (a.equity ?? a.available) + live.sum((b) => b.exchange === a.exchange && b.account === a.name, (x) => x.equity + x.mtm),
+    pulse: pulseOf(`acc:${a.exchange}:${a.name}`),
     color: ACCOUNT_COLOR[i % ACCOUNT_COLOR.length],
     pct: [3.9, 3.1, 2.6, 1.2, 0.4][i % 5],
   }));
@@ -226,7 +290,10 @@ function RunningOverview() {
   const selected = accountRows.find((a) => a.id === account);
   const scale = selected ? selected.value / accountsTotal : 1;
 
-  const values = useMemo(() => metricSeries(metric, period).map((v) => v * scale), [metric, period, scale]);
+  const base = useMemo(() => metricSeries(metric, period), [metric, period]);
+  // The last point is "now": it follows the live totals.
+  const liveTail = metric === "equity" ? liveEquity : metric === "earnings" ? liveFees : liveTrades * 0.04;
+  const values = useMemo(() => base.map((v, i) => (i === base.length - 1 ? v + liveTail : v) * scale), [base, liveTail, scale]);
   const n = values.length;
   const labels = values.map((_, i) => dayLabel(n - 1 - i));
   const ticks = niceTicks(values);
@@ -236,6 +303,7 @@ function RunningOverview() {
       ex,
       value: accountRows.filter((a) => a.exchange === ex).reduce((s, a) => s + a.value, 0),
       bots: allBots.filter((b) => b.exchange === ex).length,
+      pulse: pulseOf(`ex:${ex}`),
     }))
     .filter((r) => r.value > 0)
     .sort((a, b) => b.value - a.value);
@@ -243,8 +311,12 @@ function RunningOverview() {
   const SHADES = ["#ffffff", "rgba(255,255,255,.4)"];
   const [hoverSeg, setHoverSeg] = useState<number | null>(null);
   const byType = [
-    { key: "V3 Bots", value: allBots.filter((b) => b.type === "v3").reduce((s, b) => s + b.equity, 0), bots: allBots.filter((b) => b.type === "v3").length },
-    { key: "PointBots", value: allBots.filter((b) => b.type === "point").reduce((s, b) => s + b.equity, 0), bots: allBots.filter((b) => b.type === "point").length },
+    ...(["v3", "point"] as const).map((t) => ({
+      key: t === "v3" ? "V3 Bots" : "PointBots",
+      value: allBots.filter((b) => b.type === t).reduce((s, b) => s + b.equity, 0) + live.sum((b) => b.type === t, (x) => x.equity + x.mtm),
+      bots: allBots.filter((b) => b.type === t).length,
+      pulse: pulseOf(`type:${t}`),
+    })),
   ];
   const typeTotal = byType.reduce((s, r) => s + r.value, 0);
 
@@ -253,8 +325,12 @@ function RunningOverview() {
   const top = [...mine, ...allBots.filter((b) => !b.mine).sort((a, b) => b.earned - a.earned)].slice(0, 5);
   const grid = useGridMoments(view === "grid" ? top : []);
 
-  const avg = DAILY.reduce((a, b) => a + b, 0) / DAILY.length;
-  const best = Math.max(...DAILY);
+  // Today's bar grows with every fill.
+  const daily = useMemo(() => DAILY.map((v, i) => (i === DAILY.length - 1 ? v + liveFees : v)), [liveFees]);
+  const today = daily[daily.length - 1];
+  const avg = daily.reduce((a, b) => a + b, 0) / daily.length;
+  const best = Math.max(...daily);
+  const P = live.pulse.all;
 
   return (
     <>
@@ -275,26 +351,48 @@ function RunningOverview() {
         }
       />
       <PageBody>
+        {live.reporters}
         {/* Summary */}
         <div className="flex py-6">
           <div className="flex w-[370px] flex-col gap-2.5">
-            <span className="t-l12 text-white/50">Total equity</span>
-            <span className="tnum text-[36px] leading-[36px] font-medium tracking-[-0.02em]">${money(totalEquity)}</span>
+            <span className="flex items-center gap-3">
+              <span className="t-l12 text-white/50">Total equity</span>
+              <LiveBadge />
+            </span>
+            <LiveNumber
+              value={totalEquity}
+              k={P.k}
+              dir={P.dir}
+              bump
+              format={(n) => `$${money(n)}`}
+              className="self-start text-[36px] leading-[36px] font-medium tracking-[-0.02em]"
+            />
             <span className="flex items-center gap-2">
-              <span className="t-b14 leading-[18px] text-gain">{signedUsd(change.usd)}</span>
+              <LiveNumber value={change.usd} k={P.k} dir={P.dir} flash="text" delay={150} format={signedUsd} className="t-b14 leading-[18px] text-gain" />
               <span className="t-l12 bg-gain/10 px-1 leading-4 text-gain">+{change.pct}%</span>
               <span className="t-l12 leading-4 text-white/50">{period}</span>
             </span>
           </div>
-          <Stat label="Total earned" value={signedUsd(totalEarned)} sub="All time" gain />
-          <Stat label="Yearly return" value="+15.2%" sub="APR" gain />
+          <Stat label="Total earned" sub="All time" gain>
+            <LiveNumber value={totalEarned} k={P.k} dir={P.dir} delay={120} format={signedUsd} />
+          </Stat>
+          <Stat label="Yearly return" sub="APR" gain>
+            <LiveNumber value={15.2} delay={240} flash={false} format={(n) => `+${n.toFixed(1)}%`} />
+          </Stat>
         </div>
 
         {/* Performance + Exchange */}
         <div className="grid grid-cols-[1fr_460px] gap-4">
           <section className="flex flex-col gap-5 overflow-hidden rounded-sm border border-line bg-card px-5 pt-3.5">
             <div className="flex items-center justify-between">
-              <span className="t-b14">Performance</span>
+              <span className="flex items-center gap-3">
+                <span className="t-b14">Performance</span>
+                {liveTrades > 0 && (
+                  <span className="t-l12 text-white/40">
+                    +{liveTrades} {liveTrades === 1 ? "trade" : "trades"} this session
+                  </span>
+                )}
+              </span>
               <Segmented
                 size="sm"
                 value={metric}
@@ -313,6 +411,8 @@ function RunningOverview() {
               yTicks={ticks}
               format={kFmt}
               height={300}
+              live
+              pulseKey={P.k}
               tooltip={(i) => {
                 const prev = values[Math.max(0, i - 1)];
                 const d = values[i] - prev;
@@ -349,7 +449,7 @@ function RunningOverview() {
                     <span className="t-l12 bg-gain/15 px-[5px] leading-[15px] text-gain">{accountRows.length}</span>
                   </span>
                   <span className="t-b14 flex gap-2 leading-4">
-                    <span className="text-white/90">{usd(accountsTotal)}</span>
+                    <LiveNumber value={accountsTotal} k={P.k} dir={P.dir} render={(n) => <Cents n={n} />} className="text-white/90" />
                     <span className="text-gain/90">+3.4%</span>
                   </span>
                 </AccountFilter>
@@ -361,7 +461,7 @@ function RunningOverview() {
                       <ExchangeTag exchange={a.exchange} size="xs" />
                     </span>
                     <span className="t-b14 flex gap-2 leading-4">
-                      <span className="text-white/60">{usd(a.value)}</span>
+                      <LiveNumber value={a.value} k={a.pulse.k} dir={a.pulse.dir} render={(n) => <Cents n={n} />} className="text-white/60" />
                       <span className="text-gain/90">+{a.pct}%</span>
                     </span>
                   </AccountFilter>
@@ -394,7 +494,7 @@ function RunningOverview() {
                   onActive={setHoverSeg}
                   center={
                     <>
-                      <span className="tnum text-[18px] leading-[27px] font-medium">{usd(exTotal)}</span>
+                      <LiveNumber value={exTotal} k={P.k} dir={P.dir} flash="text" render={(n) => <Cents n={n} />} className="text-[18px] leading-[27px] font-medium" />
                       <span className="text-[12px] leading-[15px] font-medium text-white/55">{byExchange.length} exchanges</span>
                     </>
                   }
@@ -407,7 +507,7 @@ function RunningOverview() {
                   onActive={setHoverSeg}
                   center={
                     <>
-                      <span className="tnum text-[18px] leading-[27px] font-medium">{usd(typeTotal)}</span>
+                      <LiveNumber value={typeTotal} k={P.k} dir={P.dir} flash="text" render={(n) => <Cents n={n} />} className="text-[18px] leading-[27px] font-medium" />
                       <span className="text-[12px] leading-[15px] font-medium text-white/55">{allBots.length} bots</span>
                     </>
                   }
@@ -428,6 +528,7 @@ function RunningOverview() {
                       bots={r.bots}
                       pct={(r.value / exTotal) * 100}
                       value={r.value}
+                      pulse={r.pulse}
                     />
                   ))
                 : byType.map((r, i) => (
@@ -441,6 +542,7 @@ function RunningOverview() {
                       bots={r.bots}
                       pct={(r.value / typeTotal) * 100}
                       value={r.value}
+                      pulse={r.pulse}
                     />
                   ))}
             </div>
@@ -453,30 +555,36 @@ function RunningOverview() {
             <div className="flex items-center justify-between">
               <span className="t-b14">Daily earnings</span>
               <span className="flex gap-6">
-                <MiniStat label="Today" value={signedUsd(DAILY[DAILY.length - 1])} gain />
-                <MiniStat label="Avg / day" value={signedUsd(avg)} />
-                <MiniStat label="Best day" value={signedUsd(best)} gain />
+                <MiniStat label="Today" gain>
+                  <LiveNumber value={today} k={P.k} dir={P.dir} format={signedUsd} />
+                </MiniStat>
+                <MiniStat label="Avg / day">{signedUsd(avg)}</MiniStat>
+                <MiniStat label="Best day" gain>
+                  {signedUsd(best)}
+                </MiniStat>
               </span>
             </div>
             <BarChart
-              values={DAILY}
+              values={daily}
+              live
+              pulseKey={P.k}
               labels={DAILY.map((_, i) => dayLabel(DAILY.length - 1 - i))}
               tooltip={(i) => (
                 <div className="flex flex-col gap-2">
                   <span className="t-l12 text-white/50">{dayLong(DAILY.length - 1 - i)}</span>
-                  <span className={cn("text-[18px] leading-[24px] font-medium", DAILY[i] >= 0 ? "text-gain" : "text-error")}>{signedUsd(DAILY[i])}</span>
+                  <span className={cn("text-[18px] leading-[24px] font-medium", daily[i] >= 0 ? "text-gain" : "text-error")}>{signedUsd(daily[i])}</span>
                   <span className="h-px bg-white/10" />
                   <span className="t-b14 flex justify-between leading-4">
                     <span className="text-white/60">V3 Bots</span>
-                    <span className={DAILY[i] >= 0 ? "text-gain" : "text-error"}>{signedUsd(DAILY[i] * 0.82)}</span>
+                    <span className={daily[i] >= 0 ? "text-gain" : "text-error"}>{signedUsd(daily[i] * 0.82)}</span>
                   </span>
                   <span className="t-b14 flex justify-between leading-4">
                     <span className="text-white/60">PointBots</span>
-                    <span className={DAILY[i] >= 0 ? "text-gain" : "text-error"}>{signedUsd(DAILY[i] * 0.18)}</span>
+                    <span className={daily[i] >= 0 ? "text-gain" : "text-error"}>{signedUsd(daily[i] * 0.18)}</span>
                   </span>
                   <span className="t-b14 flex justify-between leading-4">
                     <span className="text-white/60">Trades</span>
-                    <span>{DAILY_TRADES[i]}</span>
+                    <span>{DAILY_TRADES[i] + (i === daily.length - 1 ? liveTrades : 0)}</span>
                   </span>
                 </div>
               )}
@@ -560,21 +668,21 @@ function RunningOverview() {
   );
 }
 
-function Stat({ label, value, sub, gain }: { label: string; value: string; sub: string; gain?: boolean }) {
+function Stat({ label, children, sub, gain }: { label: string; children: ReactNode; sub: string; gain?: boolean }) {
   return (
     <div className="flex w-[314px] flex-col justify-center gap-2.5 border-l border-line px-8 py-1">
       <span className="t-l12 text-white/50">{label}</span>
-      <span className={cn("tnum text-[24px] leading-[26px]", gain && "text-gain")}>{value}</span>
+      <span className={cn("tnum flex text-[24px] leading-[26px]", gain && "text-gain")}>{children}</span>
       <span className="t-l12 text-white/50">{sub}</span>
     </div>
   );
 }
 
-function MiniStat({ label, value, gain }: { label: string; value: string; gain?: boolean }) {
+function MiniStat({ label, children, gain }: { label: string; children: ReactNode; gain?: boolean }) {
   return (
     <span className="flex items-center gap-2">
       <span className="t-l12 text-white/50">{label}</span>
-      <span className={cn("t-b14 tnum", gain && "text-gain")}>{value}</span>
+      <span className={cn("t-b14 tnum", gain && "text-gain")}>{children}</span>
     </span>
   );
 }
@@ -604,6 +712,7 @@ function LegendRow({
   last,
   dim,
   onHover,
+  pulse,
 }: {
   icon: ReactNode;
   swatch?: string;
@@ -614,6 +723,7 @@ function LegendRow({
   last?: boolean;
   dim?: boolean;
   onHover?: (on: boolean) => void;
+  pulse?: Pulse;
 }) {
   return (
     <div
@@ -628,7 +738,9 @@ function LegendRow({
         {bots} {bots === 1 ? "bot" : "bots"}
       </span>
       <span className="t-b14 w-11 text-right text-white/60">{Math.round(pct)}%</span>
-      <span className="t-b14 tnum w-[76px] text-right">{usd(value)}</span>
+      <span className="t-b14 w-[76px] text-right">
+        <LiveNumber value={value} k={pulse?.k} dir={pulse?.dir} render={(n) => <Cents n={n} />} />
+      </span>
     </div>
   );
 }

@@ -268,6 +268,16 @@
 .live-hit {
   animation: live-hit 1100ms ease-out;
 }
+/* Overview charts: the live end marker / today's bar lights up on each fill. */
+@keyframes chart-hit {
+  from {
+    background-color: #fff;
+    box-shadow: 0 0 12px 2px rgb(74 222 128 / 0.7);
+  }
+}
+.chart-hit {
+  animation: chart-hit 800ms ease-out;
+}
 @keyframes live-hit-down {
   from {
     border-color: rgb(255 55 55 / 0.45);

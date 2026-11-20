@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { cn } from "@/lib/cn";
 
 const GAIN = "#4ADE80";
@@ -64,6 +65,51 @@ export function FluidSparkline({ values, height = 56, negative }: { values: numb
   );
 }
 
+/** Eases the last value of a series toward its new target, so a live chart end glides instead of jumping. */
+function useLiveTail(values: number[], enabled: boolean) {
+  const reduced = useReducedMotion();
+  const target = values[values.length - 1];
+  const [tail, setTail] = useState(target);
+  const cur = useRef(target);
+  useEffect(() => {
+    if (!enabled || reduced) {
+      cur.current = target;
+      setTail(target);
+      return;
+    }
+    const from = cur.current;
+    if (from === target) return;
+    let raf = 0;
+    let t0 = 0;
+    const step = (now: number) => {
+      if (!t0) t0 = now;
+      const t = Math.min(1, (now - t0) / 600);
+      const v = from + (target - from) * (1 - Math.pow(1 - t, 3));
+      cur.current = v;
+      setTail(v);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, enabled, reduced]);
+  return useMemo(() => (enabled ? [...values.slice(0, -1), tail] : values), [values, tail, enabled]);
+}
+
+/** Restarts a CSS animation class on an element each time `k` changes (nothing remounts). */
+function useRestartClass<T extends HTMLElement>(k: number | undefined, cls: string) {
+  const ref = useRef<T>(null);
+  const seen = useRef(k);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || k === undefined || k === seen.current) return;
+    seen.current = k;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }, [k, cls]);
+  return ref;
+}
+
 /** Equity / earnings area chart with a hover crosshair and tooltip (Overview Performance card). */
 export function AreaChart({
   values,
@@ -73,6 +119,8 @@ export function AreaChart({
   format,
   tooltip,
   startIndex,
+  live,
+  pulseKey,
 }: {
   values: number[];
   labels: string[];
@@ -81,9 +129,15 @@ export function AreaChart({
   format: (v: number) => string;
   tooltip: (i: number) => ReactNode;
   startIndex?: number;
+  /** The last point is "now": it glides to new values and its marker pings. */
+  live?: boolean;
+  /** Bump on each fill: the end marker flashes. */
+  pulseKey?: number;
 }) {
   const id = useId();
   const W = 971;
+  values = useLiveTail(values, !!live);
+  const flash = useRestartClass<HTMLSpanElement>(pulseKey, "chart-hit");
   const lo = Math.min(...yTicks);
   const hi = Math.max(...yTicks);
   const { d, pts } = path(values, W, height, 0, lo, hi);
@@ -123,7 +177,13 @@ export function AreaChart({
               </>
             )}
           </svg>
-          <span className="absolute size-2 bg-gain" style={{ left: `calc(${(last[0] / W) * 100}% - 4px)`, top: last[1] - 4 }} />
+          {live && hover === null && (
+            <span className="pointer-events-none absolute inset-x-0 border-t border-dashed border-gain/35" style={{ top: last[1] }} />
+          )}
+          <span className="absolute size-2" style={{ left: `calc(${(last[0] / W) * 100}% - 4px)`, top: last[1] - 4 }}>
+            {live && <span className="live-ping absolute inset-0 bg-gain" />}
+            <span ref={flash} className="absolute inset-0 bg-gain" />
+          </span>
           {hp && hover !== null && (
             <>
               <span
@@ -183,13 +243,20 @@ export function BarChart({
   height = 200,
   tooltip,
   startIndex,
+  live,
+  pulseKey,
 }: {
   values: number[];
   labels: string[];
   height?: number;
   tooltip: (i: number) => ReactNode;
   startIndex?: number;
+  /** The last bar is today: it grows smoothly, stays bright and flashes on each fill. */
+  live?: boolean;
+  pulseKey?: number;
 }) {
+  values = useLiveTail(values, !!live);
+  const flash = useRestartClass<HTMLSpanElement>(pulseKey, "chart-hit");
   const ticks = [40, 30, 20, 10, 0, -10];
   const hi = 40;
   const lo = -10;
@@ -208,9 +275,16 @@ export function BarChart({
               <div key={i} className="relative flex-1" onMouseEnter={() => setHover(i)}>
                 {hover === i && <span className="absolute inset-y-0 left-[2px] right-[2px] bg-white/4" />}
                 <span
-                  className={cn("absolute left-1/2 w-[68%] max-w-[22px] -translate-x-1/2", v >= 0 ? (hover === i ? "bg-gain" : "bg-gain/55") : hover === i ? "bg-error" : "bg-error/70")}
+                  ref={live && i === values.length - 1 ? flash : undefined}
+                  className={cn(
+                    "absolute left-1/2 w-[68%] max-w-[22px] -translate-x-1/2",
+                    v >= 0 ? (hover === i || (live && i === values.length - 1) ? "bg-gain" : "bg-gain/55") : hover === i ? "bg-error" : "bg-error/70",
+                  )}
                   style={v >= 0 ? { top: y(v), height: y(0) - y(v) } : { top: y(0), height: y(v) - y(0) }}
                 />
+                {live && i === values.length - 1 && v >= 0 && (
+                  <span className="live-breathe absolute left-1/2 h-0.5 w-[68%] max-w-[22px] -translate-x-1/2 bg-white" style={{ top: y(v) - 3 }} />
+                )}
                 {hover === i && v >= 0 && <span className="absolute left-1/2 h-0.5 w-[68%] max-w-[22px] -translate-x-1/2 bg-white" style={{ top: y(v) }} />}
               </div>
             ))}
