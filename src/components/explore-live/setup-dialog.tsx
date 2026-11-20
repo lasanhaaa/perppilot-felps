@@ -6,9 +6,9 @@ import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icons";
 import { ExchangeLogo } from "@/components/ui/exchange-logo";
 import { MARKETS } from "@/lib/draft";
-import { ENTRY_LABEL, ENTRY_POS, EXCHANGE_CODE, EXCHANGE_NAME, SETUPS, categoriesOf, expand, priceFmt, rng, usd, type Asset, type Setup } from "./data";
+import { ENTRY_LABEL, ENTRY_POS, EXCHANGE_NAME, SETUPS, categoriesOf, expand, priceFmt, rng, usd, type Asset, type Setup } from "./data";
 import { Flash, useInterval, useLive } from "./motion";
-import { AssetIcon, EntryLabel, GAIN, LiveDot, pct } from "./parts";
+import { AssetIcon, EntryLabel, ExchangeTag, GAIN, LiveDot, pct } from "./parts";
 
 /* Setup dialog (2310:19080, modal 2310:19564): platform pop-up pattern, Details / Exchanges / Asset. */
 
@@ -273,7 +273,7 @@ export function SetupDialog({ id, onClose, onSwitch, onToast }: { id: string; on
           <div className="flex items-center gap-2.5">
             <AssetIcon coin={s.coin} size={32} />
             <span className="t-h24">{s.coin}</span>
-            <span className="t-l12 border border-line bg-raised px-1.5 py-0.5 text-white/60">{EXCHANGE_CODE[s.exchange]}</span>
+            <ExchangeTag id={s.exchange} />
             {cats.map((c) => (
               <span key={c.id} className="t-b14 px-2 py-0.5" style={{ background: `${c.color}1f`, color: c.color }}>
                 {c.name}

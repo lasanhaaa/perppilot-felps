@@ -2,9 +2,9 @@
 
 import { useMemo, type CSSProperties } from "react";
 import { cn } from "@/lib/cn";
-import { EXCHANGE_CODE, EXCHANGE_NAME, SETUPS, expand, priceFmt, sparkSeries, usd, type Highlight } from "./data";
+import { EXCHANGE_NAME, SETUPS, expand, priceFmt, sparkSeries, usd, type Highlight } from "./data";
 import { CountUp, Flash, useLive } from "./motion";
-import { AssetIcon, CornerBrackets, DeltaChip, EntryLabel, ExchangeCode, HotTag, PerfChart, RangeBar, pct, signed } from "./parts";
+import { AssetIcon, CornerBrackets, DeltaChip, EntryLabel, ExchangeTag, HotTag, PerfChart, RangeBar, pct, signed, widthOf } from "./parts";
 
 /* ---------- Setup tile · Live (2309:17308): 248 px, rank + entry on top, card with corner brackets ---------- */
 
@@ -22,22 +22,23 @@ export function SetupTile({ id, rank, rankColor, index, onOpen }: { id: string; 
       style={{ "--i": index } as CSSProperties}
       aria-label={`${s.coin} on ${EXCHANGE_NAME[s.exchange]}, APR ${pct(apr)}`}
     >
-      <div className="flex h-[21px] items-center justify-between">
+      <div className="flex h-[21px] items-center gap-2">
         <span className="t-l12" style={{ color: rankColor }}>
           #{rank}
         </span>
+        {s.hot && <HotTag small />}
+        <span className="flex-1" />
         <EntryLabel entry={s.entry} />
       </div>
       <div className="el-tile relative flex w-full flex-col gap-2.5 bg-card p-4">
         <div className="flex h-6 items-center gap-2">
           <AssetIcon coin={s.coin} size={24} />
           <span className="t-b16m">{s.coin}</span>
-          {s.hot && <HotTag small />}
           <span className="flex-1" />
-          <ExchangeCode code={EXCHANGE_CODE[s.exchange]} />
+          <ExchangeTag id={s.exchange} small />
         </div>
         <p className="t-l12 text-white/30">
-          {EXCHANGE_NAME[s.exchange]} | Fee {s.fee.toFixed(2)}%
+          Fee {s.fee.toFixed(2)}% | Width {widthOf(s.lo, s.hi)}
         </p>
         <div className="flex items-end justify-between">
           <div className="flex flex-col">
@@ -83,10 +84,10 @@ export function HighlightTile({ h, earned }: { h: Highlight; earned: { n: number
         <span className="t-b16m">{s.coin}</span>
         {s.hot && <HotTag />}
         <span className="flex-1" />
-        <ExchangeCode code={EXCHANGE_CODE[s.exchange]} />
+        <ExchangeTag id={s.exchange} />
       </div>
       <p className="t-l12 relative flex gap-1.5 text-white/30">
-        {EXCHANGE_NAME[s.exchange]} <span>|</span> <span style={{ color: h.categoryColor }}>{h.category}</span>
+        <span style={{ color: h.categoryColor }}>{h.category}</span> <span>|</span> Width {widthOf(s.lo, s.hi)}
       </p>
       <div className="relative flex flex-col gap-0.5">
         <span className="t-l12 text-white/30">APR</span>

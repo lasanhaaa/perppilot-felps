@@ -1,16 +1,17 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { useStore } from "@/lib/store";
 import { Dropdown, Segmented } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
 import { InfoButton } from "@/components/ui/tooltip";
 import type { ExchangeId } from "@/components/ui/exchange-logo";
 import { HighlightsBand } from "@/components/explore-live/carousel";
-import { CATEGORIES, EXCHANGE_CODE, EXCHANGE_NAME, SETUPS, TICKER_START, priceFmt, sparkSeries, usd, type Category, type TickerEvent } from "@/components/explore-live/data";
+import { CATEGORIES, EXCHANGE_NAME, SETUPS, TICKER_START, priceFmt, sparkSeries, usd, type Category, type Setup, type TickerEvent } from "@/components/explore-live/data";
 import { CountUp, Flash, LiveProvider, useInterval, useLive } from "@/components/explore-live/motion";
-import { AssetIcon, CategoryIcon, EntryLabel, ExchangeCode, GridSquare, HotTag, LiveDot, PerfChart, pct, signed } from "@/components/explore-live/parts";
+import { AssetIcon, CategoryIcon, EntryLabel, ExchangeTag, GridSquare, HotTag, LiveDot, PerfChart, pct, signed } from "@/components/explore-live/parts";
 import { SetupDialog } from "@/components/explore-live/setup-dialog";
 import { SetupTile } from "@/components/explore-live/tiles";
 
@@ -26,7 +27,15 @@ type View = "own" | "free" | "academy" | "mentoring";
 const VIEW_SCALE: Record<View, number> = { own: 1, free: 0.82, academy: 0.9, mentoring: 0.95 };
 
 type Ranking = "score" | "apr";
-type SortBy = "rank" | "inrange" | "exits" | "newest";
+/** "Show" replaces a plain sort: each option answers a question the user brings to the page. */
+type Goal = "best" | "entry" | "calm" | "heating";
+const GOALS: Record<Goal, { label: string; tip: string }> = {
+  best: { label: "Show: Best overall", tip: "Every setup in rank order. Score blends APR, time in range and range exits, adjusted for risk; APR ranks by return alone. Ranks restart in every category." },
+  entry: { label: "Show: Good entry now", tip: "Only setups whose price sits low in its range right now, so a bot started today has the most room before the upper bound." },
+  calm: { label: "Show: Calm ride", tip: "Setups that stayed in range at least 95% of the time, with at most 1 range exit in 7 days. Lower APR, fewer surprises." },
+  heating: { label: "Show: Heating up", tip: "Setups whose APR rose over the last 7 days, fastest first." },
+};
+const fitsGoal = (s: Setup, g: Goal) => (g === "entry" ? s.entry === "good" : g === "calm" ? s.inRange >= 95 && s.exits <= 1 : g === "heating" ? s.d7 > 0 : true);
 type Shown = "all" | "curated";
 type Layout = "tiles" | "list";
 
@@ -45,8 +54,9 @@ export default function ExploreLivePage() {
 function ExploreLive({ view, setView }: { view: View; setView: (v: View) => void }) {
   const [q, setQ] = useState("");
   const [ranking, setRanking] = useState<Ranking>("score");
-  const [ex, setEx] = useState<"all" | ExchangeId>("all");
-  const [sort, setSort] = useState<SortBy>("rank");
+  const { allAccounts } = useStore();
+  const [ex, setEx] = useState<"all" | "mine" | ExchangeId>("all");
+  const [goal, setGoal] = useState<Goal>("best");
   const [shown, setShown] = useState<Shown>("all");
   const [layout, setLayout] = useState<Layout>("tiles");
   const [open, setOpen] = useState<string | null>(null);
@@ -78,26 +88,36 @@ function ExploreLive({ view, setView }: { view: View; setView: (v: View) => void
     setQ("");
     setRanking("score");
     setEx("all");
-    setSort("rank");
+    setGoal("best");
     setShown("all");
   };
-  const filtered = q.trim() !== "" || ranking !== "score" || ex !== "all" || sort !== "rank" || shown !== "all";
+  const filtered = q.trim() !== "" || ranking !== "score" || ex !== "all" || goal !== "best" || shown !== "all";
+  /** Exchanges the user has an account on (the prototype's own accounts plus demo ones once a bot runs). */
+  const mine = useMemo(() => new Set(allAccounts.map((a) => a.exchange)), [allAccounts]);
 
-  /** Setups of a category after the filters, in rank order (rank = position by score or APR). */
+  /**
+   * Setups of a category after the filters. The rank is the setup's place in its category by Score
+   * or APR before any filter, so "#3" always means third in Top 10.
+   */
   const rowsOf = useCallback(
     (cat: Category) => {
       const needle = q.trim().toLowerCase();
-      const ranked = cat.setups
+      const rows = cat.setups
         .map((id) => SETUPS[id])
-        .filter((s) => (ex === "all" || s.exchange === ex) && (shown === "all" || s.curated) && (!needle || `${s.coin}-usd ${EXCHANGE_NAME[s.exchange]}`.toLowerCase().includes(needle)))
         .sort((a, b) => (ranking === "apr" ? b.apr - a.apr : b.score - a.score))
-        .map((s, i) => ({ s, rank: i + 1 }));
-      if (sort === "inrange") return ranked.sort((a, b) => b.s.inRange - a.s.inRange);
-      if (sort === "exits") return ranked.sort((a, b) => a.s.exits - b.s.exits);
-      if (sort === "newest") return ranked.sort((a, b) => a.s.runtime - b.s.runtime);
-      return ranked;
+        .map((s, i) => ({ s, rank: i + 1 }))
+        .filter(
+          ({ s }) =>
+            (ex === "all" || (ex === "mine" ? mine.has(s.exchange) : s.exchange === ex)) &&
+            (shown === "all" || s.curated) &&
+            fitsGoal(s, goal) &&
+            (!needle || `${s.coin}-usd ${EXCHANGE_NAME[s.exchange]}`.toLowerCase().includes(needle)),
+        );
+      if (goal === "calm") rows.sort((a, b) => b.s.inRange - a.s.inRange || a.s.exits - b.s.exits);
+      if (goal === "heating") rows.sort((a, b) => b.s.d7 - a.s.d7);
+      return rows;
     },
-    [q, ex, shown, ranking, sort],
+    [q, ex, mine, shown, ranking, goal],
   );
 
   return (
@@ -146,28 +166,20 @@ function ExploreLive({ view, setView }: { view: View; setView: (v: View) => void
             ]}
           />
           <Dropdown
-            className="w-[176px]"
+            className="w-[208px]"
             value={ex}
             onChange={setEx}
             options={[
               { value: "all", label: "Exchange: All" },
+              ...(mine.size > 0 ? [{ value: "mine" as const, label: `Exchange: Mine (${mine.size})` }] : []),
               { value: "hyperliquid", label: "Exchange: Hyperliquid" },
               { value: "nado", label: "Exchange: Nado" },
               { value: "lighter", label: "Exchange: Lighter" },
               { value: "extended", label: "Exchange: Extended" },
             ]}
           />
-          <Dropdown
-            className="w-[176px]"
-            value={sort}
-            onChange={setSort}
-            options={[
-              { value: "rank", label: ranking === "apr" ? "Sort: APR" : "Sort: Score" },
-              { value: "inrange", label: "Sort: In range" },
-              { value: "exits", label: "Sort: Fewest exits" },
-              { value: "newest", label: "Sort: Newest" },
-            ]}
-          />
+          <Dropdown className="w-[212px]" value={goal} onChange={setGoal} options={(Object.keys(GOALS) as Goal[]).map((g) => ({ value: g, label: GOALS[g].label }))} />
+          <InfoButton label="What this view shows" tip={GOALS[goal].tip} />
           <button
             type="button"
             onClick={reset}
@@ -176,7 +188,6 @@ function ExploreLive({ view, setView }: { view: View; setView: (v: View) => void
           >
             Reset
           </button>
-          <InfoButton label="How ranking works" tip="Score blends APR, time in range and range exits, adjusted for risk. APR ranks by return alone. Ranks restart in every category." />
           <span className="flex-1" />
           <Segmented
             size="sm"
@@ -215,7 +226,7 @@ function ExploreLive({ view, setView }: { view: View; setView: (v: View) => void
         </div>
 
         {/* One section per category. The key restarts the stagger when the filters change. */}
-        <div key={`${layout}-${q}-${ranking}-${ex}-${sort}-${shown}`} className="flex flex-col gap-10">
+        <div key={`${layout}-${q}-${ranking}-${ex}-${goal}-${shown}`} className="flex flex-col gap-10">
           {CATEGORIES.map((cat) => (
             <CategorySection key={cat.id} cat={cat} rows={rowsOf(cat)} layout={layout} filtered={filtered} onReset={reset} onOpen={openSetup} />
           ))}
@@ -242,37 +253,95 @@ function ExploreLive({ view, setView }: { view: View; setView: (v: View) => void
 
 const age = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`);
 
+const TICKER_SPEED = 44; // px per second
+const TICKER_MAX = 18;
+
+/**
+ * Rotating bar: the events scroll left without stopping. An event that leaves on the left goes
+ * back to the end of the queue; a new one is slotted in just past the right edge, so it rolls in
+ * with a green flash. Hover slows it to a stop so a line can be read.
+ */
 function Ticker() {
-  const reduced = useReducedMotion();
   const live = useLive();
   const [items, setItems] = useState<TickerEvent[]>(TICKER_START);
+  const box = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
+  const st = useRef({ off: 0, v: TICKER_SPEED, hover: false, pending: 0 });
   const next = useRef(100);
   const pool = useMemo(() => Object.values(SETUPS), []);
 
-  useInterval(() => setItems((l) => l.map((e) => ({ ...e, age: e.age + 1 }))), 1000);
-  useInterval(
-    () => {
-      const s = pool[Math.floor(Math.random() * pool.length)];
-      const r = Math.random();
-      const kind: TickerEvent["kind"] = r < 0.72 ? "fees" : r < 0.86 ? "rerange" : "apr";
-      const value = kind === "fees" ? +(0.8 + Math.random() * 34).toFixed(2) : kind === "apr" ? live.apr(s.id) : 0;
-      setItems((l) => [{ id: next.current++, coin: s.coin, exchange: s.exchange, kind, value, age: 0, fresh: true }, ...l.map((e) => ({ ...e, fresh: false }))].slice(0, 14));
-    },
-    2600,
-    !reduced,
-  );
+  useInterval(() => setItems((l) => l.map((e) => ({ ...e, age: e.age + 1, fresh: e.fresh && e.age < 6 }))), 1000);
+
+  // A new event every 2.6 s, slotted in just past the right edge.
+  useInterval(() => {
+    const s = pool[Math.floor(Math.random() * pool.length)];
+    const r = Math.random();
+    const kind: TickerEvent["kind"] = r < 0.72 ? "fees" : r < 0.86 ? "rerange" : "apr";
+    const value = kind === "fees" ? +(0.8 + Math.random() * 34).toFixed(2) : kind === "apr" ? live.apr(s.id) : 0;
+    const ev: TickerEvent = { id: next.current++, coin: s.coin, exchange: s.exchange, kind, value, age: 0, fresh: true };
+    const kids = Array.from(track.current?.children ?? []) as HTMLElement[];
+    const w = box.current?.clientWidth ?? 0;
+    if (st.current.pending || !kids.length) return; // a rotation is in flight: indexes would be off by one
+    const at = kids.findIndex((k) => k.offsetLeft + st.current.off > w);
+    setItems((l) => {
+      const i = at < 0 ? l.length : at;
+      const out = [...l.slice(0, i), ev, ...l.slice(i)];
+      // Keep the queue short by dropping the oldest event that is not on screen.
+      if (out.length > TICKER_MAX) {
+        const off = out.map((e, j) => ({ e, j })).filter(({ j }) => j > i).sort((a, b) => b.e.age - a.e.age)[0];
+        if (off) out.splice(off.j, 1);
+      }
+      return out;
+    });
+  }, 2600);
+
+  useEffect(() => {
+    const s = st.current;
+    let raf = 0;
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(now - last, 50);
+      last = now;
+      s.v += ((s.hover ? 0 : TICKER_SPEED) - s.v) * (1 - Math.exp(-dt / 220));
+      s.off -= (s.v * dt) / 1000;
+      const first = track.current?.firstElementChild as HTMLElement | null;
+      if (first && !s.pending && -s.off >= first.offsetWidth) {
+        // The first event left on the left: move it to the end. The offset is fixed in the commit.
+        s.pending = first.offsetWidth;
+        setItems((l) => [...l.slice(1), l[0]]);
+      }
+      if (track.current) track.current.style.transform = `translate3d(${s.off.toFixed(2)}px,0,0)`;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Same commit as the rotation, before paint: the content moved left by one event, so move back.
+  useLayoutEffect(() => {
+    const s = st.current;
+    if (!s.pending) return;
+    s.off += s.pending;
+    s.pending = 0;
+    if (track.current) track.current.style.transform = `translate3d(${s.off.toFixed(2)}px,0,0)`;
+  }, [items]);
 
   return (
     <div className="flex h-10 items-stretch overflow-hidden border-b border-line" aria-label="Live reference bots">
-      <span className="t-l12 flex flex-none items-center gap-2 border-r border-line pr-4 pl-10">
+      <span className="t-l12 relative z-10 flex flex-none items-center gap-2 border-r border-line bg-screen pr-4 pl-10">
         <LiveDot />
         <span className="text-gain">Live</span>
         <span className="text-white/30">Reference bots</span>
       </span>
-      <div className="flex min-w-0 flex-1 items-stretch whitespace-nowrap">
-        {items.map((e) => (
-          <span key={e.id} className={cn("flex flex-none items-stretch overflow-hidden border-r border-line", e.fresh && "el-tick-in")}>
-            <span className="t-b14 tnum flex items-center gap-2 px-4">
+      <div
+        ref={box}
+        className="relative min-w-0 flex-1 overflow-hidden"
+        onMouseEnter={() => (st.current.hover = true)}
+        onMouseLeave={() => (st.current.hover = false)}
+      >
+        <div ref={track} className="relative flex h-full w-max items-stretch whitespace-nowrap will-change-transform">
+          {items.map((e) => (
+            <span key={e.id} className={cn("t-b14 tnum flex flex-none items-center gap-2 border-r border-line px-4", e.fresh && "el-tick-new")}>
               <AssetIcon coin={e.coin} size={14} />
               <span>{e.coin}-USD</span>
               <span className="text-white/30">{EXCHANGE_NAME[e.exchange]}</span>
@@ -281,8 +350,8 @@ function Ticker() {
               {e.kind === "apr" && <span className="text-gain">APR {pct(e.value)}</span>}
               <span className="text-white/30">{age(e.age)}</span>
             </span>
-          </span>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -553,7 +622,7 @@ function ListRow({ row, index, last, rankColor, onOpen }: { row: Row; index: num
         <AssetIcon coin={s.coin} size={20} />
         <span className="t-b16m">{s.coin}-USD</span>
         {s.hot && <HotTag small />}
-        <ExchangeCode code={EXCHANGE_CODE[s.exchange]} />
+        <ExchangeTag id={s.exchange} small />
       </span>
       <span className="flex justify-end">
         <Flash k={p?.k ?? 0} dir={p?.dir ?? null} className="t-b16m -mx-1.5 px-1.5">

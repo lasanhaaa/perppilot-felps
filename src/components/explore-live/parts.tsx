@@ -3,15 +3,18 @@
 import { useId, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { CoinIcon } from "@/components/ui/coin";
+import { ExchangeLogo, type ExchangeId } from "@/components/ui/exchange-logo";
 import type { Coin } from "@/lib/mock";
 import type { Asset, Category, Entry } from "./data";
-import { ENTRY_COLOR, ENTRY_DOT, ENTRY_LABEL, ENTRY_POS } from "./data";
+import { ENTRY_COLOR, ENTRY_DOT, ENTRY_LABEL, ENTRY_POS, EXCHANGE_NAME } from "./data";
 
 export const GAIN = "#4ADE80";
 export const LOSS = "#FF3737";
 
 export const pct = (n: number) => `${n.toFixed(1)}%`;
 export const signed = (n: number) => `${n >= 0 ? "▲" : "▼"} ${Math.abs(n).toFixed(1)}%`;
+/** Half-width of a range around its middle, in % ("±9.2%"). */
+export const widthOf = (lo: number, hi: number) => `±${(((hi - lo) / 2 / ((hi + lo) / 2)) * 100).toFixed(1)}%`;
 
 /* ---------- Frame / Corner brackets (2247:4398): 13.5 px corners, 1 px, white 48% → 90% at the center ---------- */
 
@@ -49,8 +52,14 @@ export function AssetIcon({ coin, size = 24 }: { coin: Asset; size?: number }) {
   return <CoinIcon coin={coin as Coin} size={size} />;
 }
 
-export function ExchangeCode({ code }: { code: string }) {
-  return <span className="t-l12 bg-raised px-1.5 py-0.5 text-white/60">{code}</span>;
+/** Exchange logo + name on a raised tag (replaces the two-letter code). */
+export function ExchangeTag({ id, small }: { id: ExchangeId; small?: boolean }) {
+  return (
+    <span className={cn("inline-flex flex-none items-center gap-1.5 bg-raised whitespace-nowrap text-white/70", small ? "h-[22px] pr-1.5 pl-1 text-[12px] leading-none font-medium" : "t-b14 h-7 pr-2 pl-1.5")}>
+      <ExchangeLogo id={id} size={small ? 14 : 16} />
+      {EXCHANGE_NAME[id]}
+    </span>
+  );
 }
 
 export function HotTag({ small }: { small?: boolean }) {
