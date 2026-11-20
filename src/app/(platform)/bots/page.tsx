@@ -9,7 +9,6 @@ import { ArrowRight, Button, Dropdown, EmptyState } from "@/components/ui/primit
 import { Icon, type IconName } from "@/components/ui/icons";
 import { BotCard } from "@/components/bots/bot-ui";
 import { useGridMoments } from "@/components/bots/bot-motion-state";
-import { ChartModeSwitch, useChartMode } from "@/components/live/live-charts";
 
 type Tab = "active" | "error" | "stopped";
 type TypeFilter = "all" | "v3" | "point";
@@ -37,7 +36,6 @@ export default function BotsPage() {
     });
   const visible = sorted(allBots.filter(tabDef.match));
   const grid = useGridMoments(visible);
-  const [chart, setChart] = useChartMode();
 
   if (allBots.length === 0)
     return (
@@ -101,7 +99,6 @@ export default function BotsPage() {
           })}
         </div>
         <div className="flex items-center gap-2.5">
-          <ChartModeSwitch value={chart} onChange={setChart} className="h-10 items-center rounded-sm bg-raised" />
           <Dropdown
             icon="filter"
             className="w-[176px]"
@@ -142,7 +139,7 @@ export default function BotsPage() {
             {s.bots.length ? (
               <div className="grid grid-cols-3 gap-4 px-14">
                 {s.bots.map((b, i) => (
-                  <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} motion={grid.motionOf(b)} playKey={grid.keyOf(b)} chart={chart} index={i} />
+                  <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} motion={grid.motionOf(b)} playKey={grid.keyOf(b)} index={i} />
                 ))}
               </div>
             ) : (
