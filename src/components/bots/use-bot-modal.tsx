@@ -52,7 +52,7 @@ export function UseBotModal({ bot, onClose }: { bot: Bot; onClose: () => void })
           </div>
           <IconButton icon="close" label="Close" onClick={onClose} />
         </div>
-        <BotCard bot={bot} className="pointer-events-none" />
+        <BotCard bot={bot} live={false} className="pointer-events-none" />
         <dl className="flex flex-col">
           {rows.map(([l, v], i) => (
             <div key={l} className={cn("flex h-[42px] items-center justify-between", i < rows.length - 1 && "border-b border-white/6")}>

@@ -15,6 +15,9 @@ import { BotAvatarEditor } from "@/components/bots/avatar-editor";
 import { botSeed, motionMs } from "@/components/bots/bot-motion-state";
 import type { MotionStateId } from "@/lib/bot-motion";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { formatUptime, liveFill, useLiveBot, useLiveFills, type LiveFill, type LiveSnap } from "@/lib/live-bots";
+import { Cents, LiveDot, LiveNumber } from "@/components/live/live-number";
+import { ChartModeSwitch, LiveBadge, LiveChart, toCandles, useChartMode } from "@/components/live/live-charts";
 import { CoinIcon } from "@/components/ui/coin";
 import { EXCHANGES } from "@/components/ui/exchange-logo";
 import { Icon } from "@/components/ui/icons";
@@ -174,8 +177,6 @@ function BotDetail() {
         bot={bot}
         face={face}
         phase={motion.phase}
-        liveTrades={motion.trades}
-        fresh={motion.fresh}
         onStop={() => setStopping(true)}
         onRestart={() =>
           motion.restart(() => {
@@ -214,8 +215,6 @@ function useDetailMotion(bot: Bot | undefined, isNew: boolean) {
   const [phase, setPhase] = useState<Phase | null>(null);
   const [shot, setShot] = useState<{ id: MotionStateId; key: number } | null>(null);
   const [hovered, setHovered] = useState(false);
-  const [trades, setTrades] = useState<LiveTrade[]>([]);
-  const [fresh, setFresh] = useState<string | null>(null);
   const key = useRef(0);
   const timers = useRef<number[]>([]);
   const later = useCallback((ms: number, fn: () => void) => {
@@ -242,33 +241,26 @@ function useDetailMotion(bot: Bot | undefined, isNew: boolean) {
     live.current = bot;
   }, [bot]);
 
-  const fill = useCallback(
-    (gain?: boolean) => {
-      const b = live.current;
-      if (!b || b.status === "stopped") return;
-      const up = gain ?? Math.random() < (b.netFees >= 0 ? 0.75 : 0.35);
-      const t: LiveTrade = {
-        id: `fill-${Date.now()}`,
-        side: Math.random() < 0.55 ? "Buy" : "Sell",
-        qty: (b.equity * 1.12) / b.price / 14,
-        price: b.price * (1 + (Math.random() - 0.5) * 0.004),
-        ago: "now",
-      };
-      setTrades((list) => [t, ...list.map((x) => ({ ...x, ago: x.ago === "now" ? "1m" : x.ago }))].slice(0, 6));
-      setFresh(t.id);
-      play(up ? "pnlUp" : "pnlDown");
+  // Every fill of this bot (live engine) plays on the face: P&L up or down, like the numbers.
+  const id = bot?.id;
+  const lastShot = useRef(0);
+  const onFill = useCallback(
+    (botId: string, f: LiveFill) => {
+      if (botId !== id || reduced || phase) return;
+      const now = Date.now();
+      if (now - lastShot.current < 1800) return;
+      lastShot.current = now;
+      play(f.up ? "pnlUp" : "pnlDown");
     },
-    [play],
+    [id, reduced, phase, play],
   );
+  useLiveFills(onFill);
+  const fill = useCallback((gain?: boolean) => {
+    const b = live.current;
+    if (b && b.status !== "stopped") liveFill(b.id, gain);
+  }, []);
 
   const status = bot?.status;
-  useEffect(() => {
-    if (reduced || phase || status !== "in-range") return;
-    const t = window.setInterval(() => {
-      if (!document.hidden) fill();
-    }, 14000);
-    return () => window.clearInterval(t);
-  }, [reduced, phase, status, fill]);
 
   // Prototype panel: trigger the rare moments on demand.
   useEffect(() => {
@@ -321,7 +313,7 @@ function useDetailMotion(bot: Bot | undefined, isNew: boolean) {
                   ? "outOfRange"
                   : "idle";
 
-  return { state, playKey: shot?.key ?? 0, paused: reduced, phase, trades, fresh, setHovered, stop, restart };
+  return { state, playKey: shot?.key ?? 0, paused: reduced, phase, setHovered, stop, restart };
 }
 
 /* ================================================================== */
@@ -340,8 +332,20 @@ function SimpleView({
   updateBot: (id: string, patch: Partial<Bot>) => void;
 }) {
   const n = useBotNumbers(bot);
-  const [period, setPeriod] = useState<"1D" | "7D" | "30D" | "All">("All");
-  const values = period === "All" || n.earnings.length <= 2 ? n.earnings : n.earnings.slice(-Math.min(n.earnings.length, { "1D": 2, "7D": 8, "30D": 31 }[period]));
+  const live = useLiveBot(bot, "focus");
+  // "Live" (5-second P&L candles, moving) first: the page should look like the bot is working.
+  const [period, setPeriod] = useState<"Live" | "1D" | "7D" | "30D" | "All">("Live");
+  const [chart, setChart] = useChartMode();
+  const fees = bot.netFees + live.fees;
+  const equity = bot.equity + live.equity;
+  const startPct = n.start ? ((equity - n.start) / n.start) * 100 : 0;
+  // Earnings by day, today's point follows the live fees.
+  const days = n.earnings.length ? [...n.earnings.slice(0, -1), fees] : [];
+  const values = period === "All" || days.length <= 2 ? days : days.slice(-Math.min(days.length, { Live: 2, "1D": 2, "7D": 8, "30D": 31, All: 0 }[period]));
+  const lo = bot.min ? (bot.min / live.price - 1) * 100 : n.lo;
+  const hi = bot.max ? (bot.max / live.price - 1) * 100 : n.hi;
+  const g = gridNumbers(n, live, bot);
+  const noFeesYet = n.isNew && live.trades === 0;
   return (
     <>
       {bot.type === "v3" ? (
@@ -353,10 +357,18 @@ function SimpleView({
             </span>
             <span className="flex items-center gap-2.5">
               <Eyebrow>{bot.coin} price</Eyebrow>
-              <span className="tnum text-[24px] leading-[29px] font-medium">{priceFmt(bot.price)}</span>
+              <LiveNumber
+                value={live.price}
+                format={priceFmt}
+                from={bot.price * 0.97}
+                k={live.priceK}
+                dir={live.priceDir}
+                flash="text"
+                className="text-[24px] leading-[29px] font-medium"
+              />
             </span>
           </div>
-          <RangeBar price={bot.price} lo={n.lo} hi={n.hi} />
+          <RangeBar price={live.price} lo={lo} hi={hi} />
         </section>
       ) : (
         <PointMarketsCard bot={bot} />
@@ -365,75 +377,175 @@ function SimpleView({
       {bot.type === "v3" && <PresetCard bot={bot} suggest={suggest} onApplied={onApplied} updateBot={updateBot} />}
 
       <div className="grid grid-cols-4 gap-3.5">
+        <Kpi
+          label="Earned"
+          tone={noFeesYet ? undefined : fees < 0 ? "loss" : "gain"}
+          value={<LiveNumber value={fees} format={(v) => (Math.abs(v) < 0.005 ? "$0.00" : signedUsd(v))} delay={150} k={live.k} dir={live.dir} bump />}
+          sub={
+            noFeesYet ? (
+              <Eyebrow>First fees within the hour</Eyebrow>
+            ) : (
+              <>
+                <ChipVal tone={fees < 0 ? "loss" : "gain"}>{Math.abs(n.start ? (fees / n.start) * 100 : 0).toFixed(n.isNew ? 3 : 1)}%</ChipVal>
+                <Eyebrow>{n.isNew ? "since start" : "of pool"}</Eyebrow>
+              </>
+            )
+          }
+        />
         {n.isNew ? (
-          <>
-            <Kpi label="Earned" value="$0.00" sub={<Eyebrow>First fees within the hour</Eyebrow>} />
-            <Kpi label="Yearly return" value={<span className="text-white/40">—</span>} sub={<Eyebrow>Shows after the first day</Eyebrow>} />
-          </>
+          <Kpi label="Yearly return" value={<span className="text-white/40">—</span>} sub={<Eyebrow>Shows after the first day</Eyebrow>} />
         ) : (
-          <>
-            <Kpi label="Earned" value={signedUsd(bot.netFees)} tone={bot.netFees < 0 ? "loss" : "gain"} sub={<><ChipVal tone={bot.netFees < 0 ? "loss" : "gain"}>{Math.abs(n.startPct).toFixed(1)}%</ChipVal><Eyebrow>of pool</Eyebrow></>} />
-            <Kpi label="Yearly return" value={`${bot.apr >= 0 ? "+" : ""}${bot.apr.toFixed(1)}%`} tone={bot.apr < 0 ? "loss" : "gain"} sub={<><Eyebrow>APR</Eyebrow><Eyebrow>on pool size</Eyebrow></>} />
-          </>
+          <Kpi
+            label="Yearly return"
+            value={<LiveNumber value={bot.apr + live.apr} format={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`} delay={220} k={live.k} dir={live.dir} />}
+            tone={bot.apr < 0 ? "loss" : "gain"}
+            sub={
+              <>
+                <Eyebrow>APR</Eyebrow>
+                <Eyebrow>on pool size</Eyebrow>
+              </>
+            }
+          />
         )}
-        <Kpi label="Your money" value={usd(bot.equity)} sub={<><Eyebrow>Start</Eyebrow><ChipVal tone="gain">{usd(n.start)}</ChipVal><span className={cn("text-[13px]", n.startPct < 0 ? "text-error" : "text-gain")}>{n.startPct >= 0 ? "+" : ""}{n.startPct.toFixed(1)}%</span></>} />
-        <Kpi label="Leverage" value="1.12x" sub={<><Eyebrow>Position</Eyebrow><ChipVal tone="gain">{usd(n.position)}</ChipVal></>} />
+        <Kpi
+          label="Your money"
+          value={<LiveNumber value={equity} render={(v) => <Cents n={v} />} delay={290} k={live.k} dir={live.dir} />}
+          sub={
+            <>
+              <Eyebrow>Start</Eyebrow>
+              <ChipVal tone="gain">{usd(n.start)}</ChipVal>
+              <span className={cn("tnum text-[13px]", startPct < 0 ? "text-error" : "text-gain")}>
+                {startPct >= 0 ? "+" : ""}
+                {startPct.toFixed(2)}%
+              </span>
+            </>
+          }
+        />
+        <Kpi
+          label="Leverage"
+          value={<LiveNumber value={1.12} format={(v) => `${v.toFixed(2)}x`} delay={360} />}
+          sub={
+            <>
+              <Eyebrow>Position</Eyebrow>
+              <ChipVal tone="gain">{usd(g.holding * live.price)}</ChipVal>
+            </>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-[1fr_400px] gap-3.5">
         <section className="flex min-h-[369px] flex-col gap-5 rounded-sm border border-line bg-card p-5">
-          <div className="flex items-center justify-between">
-            <Eyebrow>Earnings over time</Eyebrow>
-            <div className="flex border border-line p-1">
-              {(["1D", "7D", "30D", "All"] as const).map((p) => (
-                <button key={p} type="button" onClick={() => setPeriod(p)} className={cn("t-b14 h-[29px] px-3", p === period ? "bg-white text-black" : "text-white/50 hover:text-white/80")}>
-                  {p}
-                </button>
-              ))}
+          <div className="flex items-center justify-between gap-3">
+            <span className="whitespace-nowrap">
+              <Eyebrow>{period === "Live" ? "Live P&L · 5s" : "Earnings over time"}</Eyebrow>
+            </span>
+            <div className="flex items-center gap-2">
+              <ChartModeSwitch value={chart} onChange={setChart} compact />
+              <div className="flex border border-line p-1">
+                {(["Live", "1D", "7D", "30D", "All"] as const).map((p) => (
+                  <button key={p} type="button" onClick={() => setPeriod(p)} className={cn("t-b14 flex h-[29px] items-center gap-1.5 px-3", p === period ? "bg-white text-black" : "text-white/50 hover:text-white/80")}>
+                    {p === "Live" && <span className={cn("size-1.5", p === period ? "bg-black" : "bg-gain")} />}
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          {values.length > 1 ? (
-            <AreaChart
-              key={period}
-              values={values}
-              labels={values.map((_, i) => dayLabel(values.length - 1 - i))}
-              yTicks={niceTicks([...values, 0], 4)}
-              format={(v) => `$${Math.round(v)}`}
+          {period === "Live" ? (
+            <LiveChart
+              candles={live.pnl}
+              mode={chart}
+              bucket={live.bucket}
+              hitK={live.k}
               height={260}
-              tooltip={(i) => (
-                <div className="flex flex-col gap-2">
-                  <Eyebrow>{dayLabel(values.length - 1 - i)}, 2026</Eyebrow>
-                  <span className="text-[20px] leading-[27px] font-medium">{signedUsd(values[i])}</span>
-                  <span className="t-b14 text-white/60">Net fees since start</span>
-                </div>
-              )}
+              format={(v) => `${v < 0 ? "-" : ""}$${money(Math.abs(v))}`}
+              tooltipLabel="Net P&L: fees plus position"
             />
+          ) : values.length > 1 ? (
+            chart === "candles" ? (
+              <LiveChart
+                key={period}
+                candles={toCandles(values)}
+                mode="candles"
+                bucket={0}
+                hitK={live.k}
+                height={260}
+                slots={Math.max(8, values.length - 1)}
+                format={(v) => `$${Math.round(v)}`}
+                timeLabel={(ago) => (ago === 0 ? "Today" : dayLabel(ago))}
+                tooltipLabel="Net fees since start"
+              />
+            ) : (
+              <AreaChart
+                key={period}
+                values={values}
+                labels={values.map((_, i) => dayLabel(values.length - 1 - i))}
+                yTicks={niceTicks([...values, 0], 4)}
+                format={(v) => `$${Math.round(v)}`}
+                height={260}
+                tooltip={(i) => (
+                  <div className="flex flex-col gap-2">
+                    <Eyebrow>{dayLabel(values.length - 1 - i)}, 2026</Eyebrow>
+                    <span className="text-[20px] leading-[27px] font-medium">{signedUsd(values[i])}</span>
+                    <span className="t-b14 text-white/60">Net fees since start</span>
+                  </div>
+                )}
+              />
+            )
           ) : (
-            <EmptyState bordered={false} className="flex-1 py-6" icon="trending-up" title="First earnings on the way" description="Fees show here after the first orders fill, usually within the hour." />
+            <EmptyState
+              bordered={false}
+              className="flex-1 py-6"
+              icon="trending-up"
+              title="Daily history starts tomorrow"
+              description="Your bot is filling its first orders right now. Watch them land in Live."
+              action={
+                <Button variant="secondary" onClick={() => setPeriod("Live")}>
+                  Watch live
+                </Button>
+              }
+            />
           )}
         </section>
         <section className="flex flex-col rounded-sm border border-line bg-card">
           <div className="flex flex-col gap-3 border-b border-white/8 p-5">
             <div className="flex items-center justify-between">
               <Eyebrow>Open orders</Eyebrow>
-              <span className="text-[24px] leading-[29px] font-medium">{n.openOrders}</span>
+              <LiveNumber value={n.openOrders} delay={200} className="text-[24px] leading-[29px] font-medium" />
             </div>
             <div className="flex h-2 gap-0.5">
-              <span className="bg-gain" style={{ flex: n.buys || 0.001 }} />
-              <span className="bg-error" style={{ flex: n.sells || 0.001 }} />
+              <span className="bg-gain transition-[flex-grow] duration-500 ease-out" style={{ flexGrow: g.buys || 0.001 }} />
+              <span className="bg-error transition-[flex-grow] duration-500 ease-out" style={{ flexGrow: g.sells || 0.001 }} />
             </div>
             <div className="flex justify-between text-[14px] leading-[17px]">
               <span>
-                <span className="text-gain">{n.buys}</span> <span className="text-white/40">BUY</span>
+                <LiveNumber value={g.buys} delay={260} k={live.k} dir={live.k ? "up" : null} className="text-gain" /> <span className="text-white/40">BUY</span>
               </span>
               <span>
-                <span className="text-error">{n.sells}</span> <span className="text-white/40">SELL</span>
+                <LiveNumber value={g.sells} delay={260} k={live.k} dir={live.k ? "down" : null} className="text-error" /> <span className="text-white/40">SELL</span>
               </span>
             </div>
           </div>
-          <StatRow label="Holding" value={`${n.holding.toFixed(5)} ${bot.coin}`} chip={<ChipVal tone="gain">{usd(n.position)}</ChipVal>} />
-          <StatRow label="Avg entry" value={priceFmt(n.avgEntry)} chip={<ChipVal tone="loss">−0.6%</ChipVal>} />
-          <StatRow label="Trades" value={String(n.tradesCount)} chip={<ChipVal tone="neutral">{n.fillsHr} / hr</ChipVal>} />
+          <StatRow
+            label="Holding"
+            value={<LiveNumber value={g.holding} format={(v) => `${v.toFixed(5)} ${bot.coin}`} delay={300} k={live.k} dir={live.dir} />}
+            chip={<ChipVal tone="gain">{usd(g.holding * live.price)}</ChipVal>}
+          />
+          <StatRow
+            label="Avg entry"
+            value={<LiveNumber value={n.avgEntry} format={priceFmt} from={n.avgEntry * 0.97} delay={340} />}
+            chip={
+              <ChipVal tone={live.price >= n.avgEntry ? "gain" : "loss"}>
+                {live.price >= n.avgEntry ? "+" : "−"}
+                {Math.abs((live.price / n.avgEntry - 1) * 100).toFixed(2)}%
+              </ChipVal>
+            }
+          />
+          <StatRow
+            label="Trades"
+            value={<LiveNumber value={n.tradesCount + live.trades} delay={380} k={live.k} dir="up" bump />}
+            chip={<ChipVal tone="neutral">{n.isNew ? Math.max(2, Math.round((n.tradesCount + live.trades) * 1.5)) : n.fillsHr} / hr</ChipVal>}
+          />
           <Link href="/course/fundamentals" className="flex h-12 items-center gap-2 px-5 text-[13px] font-semibold uppercase hover:text-brand">
             How {bot.type === "v3" ? "V3 bots" : "PointBots"} work
             <Icon name="arrow-right" size={16} />
@@ -442,6 +554,17 @@ function SimpleView({
       </div>
     </>
   );
+}
+
+/** Open orders and holding after the live fills: a filled buy becomes a sell one level up, and the other way round. */
+function gridNumbers(n: ReturnType<typeof useBotNumbers>, live: LiveSnap, bot: Bot) {
+  const total = n.buys + n.sells;
+  const shift = bot.status === "stopped" ? 0 : Math.max(-n.sells, Math.min(n.buys, live.shift));
+  return {
+    buys: total ? n.buys - shift : 0,
+    sells: total ? n.sells + shift : 0,
+    holding: Math.max(0, n.holding + live.shift * (n.holding / 14)),
+  };
 }
 
 /**
@@ -595,8 +718,13 @@ function PointMarketsCard({ bot }: { bot: Bot }) {
 
 function AdvancedView({ bot }: { bot: Bot }) {
   const n = useBotNumbers(bot);
+  const live = useLiveBot(bot, "focus");
+  const [chart, setChart] = useChartMode();
   const [tab, setTab] = useState<"market" | "fees" | "equity" | "volume">("market");
-  const [tf, setTf] = useState("1m");
+  const [tf, setTf] = useState("Live");
+  const fees = bot.netFees + live.fees;
+  const equity = bot.equity + live.equity;
+  const g = gridNumbers(n, live, bot);
   const [hover, setHover] = useState<number | null>(null);
   const isV3 = bot.type === "v3";
   const share = Math.min(1, Math.max(0.02, (bot.price - bot.min) / (bot.max - bot.min || 1)));
@@ -606,13 +734,13 @@ function AdvancedView({ bot }: { bot: Bot }) {
         <section className="flex flex-col gap-3 rounded-sm border border-line bg-card p-5">
           <div className="grid grid-cols-3 text-[14px] leading-[21px]">
             <span>
-              <span className="font-medium text-gain">{n.buys}</span> BUYS RESTING
+              <LiveNumber value={g.buys} delay={150} className="font-medium text-gain" flash={false} /> BUYS RESTING
             </span>
             <span className="text-center">
               <span className="font-medium">{n.levels}</span> LEVELS TOTAL
             </span>
             <span className="text-right">
-              <span className="font-medium text-error">{n.sells}</span> SELL RESTING
+              <LiveNumber value={g.sells} delay={150} className="font-medium text-error" flash={false} /> SELL RESTING
             </span>
           </div>
           <div
@@ -664,22 +792,29 @@ function AdvancedView({ bot }: { bot: Bot }) {
       )}
 
       <div className="grid grid-cols-3 gap-3.5">
-        <AdvStat label="Net fees" value={<span className={bot.netFees < 0 ? "text-error" : "text-gain"}>{signedUsd(bot.netFees)}</span>} sub={<><ChipVal tone="neutral">{Math.abs(n.startPct).toFixed(2)}%</ChipVal> OF POOL</>} />
+        <AdvStat
+          label="Net fees"
+          value={<LiveNumber value={fees} format={(v) => signedUsd(v)} delay={150} k={live.k} dir={live.dir} bump className={fees < 0 ? "text-error" : "text-gain"} />}
+          sub={<><ChipVal tone="neutral">{Math.abs(n.start ? (fees / n.start) * 100 : 0).toFixed(2)}%</ChipVal> OF POOL</>}
+        />
         <AdvStat
           label="Net fee APR"
           value={
             <span className={cn("flex items-center gap-2", bot.apr < 0 ? "text-error" : "text-gain")}>
-              {bot.apr >= 0 ? "+" : ""}
-              {bot.apr.toFixed(1)}%
+              <LiveNumber value={bot.apr + live.apr} format={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`} delay={200} k={live.k} dir={live.dir} />
               <Icon name="trending-up" size={20} />
             </span>
           }
           sub="ANNUALIZED / ON POOL"
         />
-        <AdvStat label="Equity" value={usd(bot.equity)} sub={<><span className={n.startPct < 0 ? "text-error" : "text-gain"}>({n.startPct >= 0 ? "+" : ""}{n.startPct.toFixed(1)}%)</span> FROM <ChipVal tone="neutral">{usd(n.start)}</ChipVal></>} />
-        <AdvStat label="Mark price" value={priceFmt(bot.price)} sub={<>START <ChipVal tone="neutral">{priceFmt(bot.price * 0.963)}</ChipVal> <span className="text-gain">(+3.8%)</span></>} />
-        <AdvStat label="Position leverage" value="1.12x" sub={<><ChipVal tone="neutral">{usd(n.position)}</ChipVal> POSITION</>} />
-        <AdvStat label="Fills / hr" value={String(n.fillsHr)} sub={<><ChipVal tone="neutral">{n.tradesCount}</ChipVal> TOTAL</>} />
+        <AdvStat label="Equity" value={<LiveNumber value={equity} render={(v) => <Cents n={v} />} delay={250} k={live.k} dir={live.dir} />} sub={<><span className={n.startPct < 0 ? "text-error" : "text-gain"}>({n.startPct >= 0 ? "+" : ""}{n.startPct.toFixed(1)}%)</span> FROM <ChipVal tone="neutral">{usd(n.start)}</ChipVal></>} />
+        <AdvStat label="Mark price" value={<LiveNumber value={live.price} format={priceFmt} from={bot.price * 0.97} delay={300} k={live.priceK} dir={live.priceDir} flash="text" />} sub={<>START <ChipVal tone="neutral">{priceFmt(bot.price * 0.963)}</ChipVal> <span className="text-gain">(+3.8%)</span></>} />
+        <AdvStat label="Position leverage" value={<LiveNumber value={1.12} format={(v) => `${v.toFixed(2)}x`} delay={350} />} sub={<><ChipVal tone="neutral">{usd(g.holding * live.price)}</ChipVal> POSITION</>} />
+        <AdvStat
+          label="Fills / hr"
+          value={<LiveNumber value={n.fillsHr} format={(v) => (Number.isInteger(n.fillsHr) ? String(Math.round(v)) : v.toFixed(1))} delay={400} />}
+          sub={<><ChipVal tone="neutral"><LiveNumber value={n.tradesCount + live.trades} delay={400} k={live.k} dir="up" flash="text" /></ChipVal> TOTAL</>}
+        />
       </div>
 
       <div className="flex gap-1.5 pt-[18px]">
@@ -707,16 +842,64 @@ function AdvancedView({ bot }: { bot: Bot }) {
             <span className="text-[18px] leading-[27px]">{bot.coin}-USD</span>
             <span className="t-l14 text-white/40">Started {bot.started.replace(" · ", " / ")}</span>
           </div>
-          <div className="flex gap-1.5">
-            {["1m", "5m", "15m", "1h", "4h", "1d"].map((t) => (
-              <button key={t} type="button" onClick={() => setTf(t)} className={cn("t-b14 h-[35px] rounded-sm px-4", t === tf ? "bg-white text-black" : "border border-line bg-raised text-white/60 hover:text-white")}>
-                {t}
-              </button>
-            ))}
-          </div>
+          {tab === "market" && (
+            <div className="flex items-center gap-3">
+              <ChartModeSwitch value={chart} onChange={setChart} className="rounded-sm" compact />
+              <div className="flex gap-1.5">
+                {["Live", "1m", "5m", "15m", "1h", "4h", "1d"].map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTf(t)}
+                    className={cn("t-b14 flex h-[35px] items-center gap-1.5 rounded-sm px-4", t === tf ? "bg-white text-black" : "border border-line bg-raised text-white/60 hover:text-white")}
+                  >
+                    {t === "Live" && <span className={cn("size-1.5", t === tf ? "bg-black" : "bg-gain")} />}
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         {tab === "market" ? (
-          <EntryLineChart key={tf} seed={n.seed + tf.length * 13} entry={n.avgEntry} />
+          tf === "Live" ? (
+            <>
+              <div className="flex items-center gap-4 pb-4">
+                {live.running && <LiveBadge label="Live · 5s candles" />}
+                <span className="t-l12 flex items-center gap-1.5 text-white/40">
+                  <span className="size-1.5 bg-gain" /> Buy filled
+                </span>
+                <span className="t-l12 flex items-center gap-1.5 text-white/40">
+                  <span className="size-1.5 bg-error" /> Sell filled
+                </span>
+              </div>
+              <LiveChart
+                candles={live.priceCandles}
+                marks={live.marks}
+                mode={chart}
+                bucket={live.bucket}
+                hitK={live.k}
+                height={520}
+                slots={60}
+                format={priceFmt}
+                refLine={{ value: n.avgEntry, label: `ENTRY ${money(n.avgEntry, 0)}` }}
+              />
+            </>
+          ) : chart === "candles" ? (
+            <LiveChart
+              key={tf}
+              candles={toCandles(entrySeries(n.seed + tf.length * 13, n.avgEntry), 4)}
+              mode="candles"
+              bucket={0}
+              height={564}
+              slots={40}
+              format={(v) => money(v, 0)}
+              refLine={{ value: n.avgEntry, label: `ENTRY ${money(n.avgEntry, 0)}` }}
+              timeLabel={(ago) => dayLabel(Math.round(ago / 2))}
+            />
+          ) : (
+            <EntryLineChart key={tf} seed={n.seed + tf.length * 13} entry={n.avgEntry} />
+          )
         ) : (
           <TabChart key={tab} tab={tab} bot={bot} seed={n.seed} />
         )}
@@ -788,15 +971,16 @@ function TabChart({ tab, bot, seed }: { tab: "fees" | "equity" | "volume"; bot: 
   );
 }
 
+function entrySeries(seed: number, entry: number) {
+  return series(seed, 160, -0.035, 0.00035, 0.006).map((v) => entry * (1 + v));
+}
+
 /** Market price vs the bot's entry: green above, red below. */
 function EntryLineChart({ seed, entry }: { seed: number; entry: number }) {
   const id = useId();
   const W = 1087;
   const H = 564;
-  const values = useMemo(() => {
-    const raw = series(seed, 160, -0.035, 0.00035, 0.006);
-    return raw.map((v) => entry * (1 + v));
-  }, [seed, entry]);
+  const values = useMemo(() => entrySeries(seed, entry), [seed, entry]);
   const lo = Math.min(...values) * 0.998;
   const hi = Math.max(...values) * 1.002;
   const y = (v: number) => ((hi - v) / (hi - lo)) * H;
@@ -864,7 +1048,14 @@ function EntryLineChart({ seed, entry }: { seed: number; entry: number }) {
 /* ================================================================== */
 
 type Phase = "stopping" | "starting" | "connecting";
-type LiveTrade = { id: string; side: "Buy" | "Sell"; qty: number; price: number; ago: string };
+
+/** "now", "12s", "3m" since a live fill. */
+function agoOf(at: number) {
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 5) return "now";
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m`;
+}
 
 function BotSidebar({
   bot,
@@ -872,18 +1063,16 @@ function BotSidebar({
   onRestart,
   face,
   phase,
-  liveTrades,
-  fresh,
 }: {
   bot: Bot;
   onStop: () => void;
   onRestart: () => void;
   face: ReactNode;
   phase: Phase | null;
-  liveTrades: LiveTrade[];
-  fresh: string | null;
 }) {
   const n = useBotNumbers(bot);
+  const live = useLiveBot(bot, "focus");
+  const working = !phase && (bot.status === "in-range" || bot.status === "out-of-range");
   const { allAccounts } = useStore();
   const exchanges = bot.accounts
     ? [...new Set(bot.accounts.map((name) => allAccounts.find((a) => a.name === name)?.exchange ?? bot.exchange))].map((e) => EXCHANGES[e].name).join(", ")
@@ -901,8 +1090,8 @@ function BotSidebar({
               <span className="text-[24px] leading-[29px] font-semibold">{bot.name}</span>
             </span>
             <span className={cn("flex items-center gap-1.5 text-[14px] leading-[17px] font-semibold uppercase", phase ? "text-warning" : bot.status === "error" ? "text-error" : running ? "text-success" : "text-white/50")}>
-              <span className={cn("size-1.5 rounded-full bg-current", phase && "animate-pulse")} />
-              {runLabel}
+              {phase ? <span className="size-1.5 animate-pulse rounded-full bg-current" /> : <LiveDot on={working} />}
+              <span className={cn(working && "live-breathe")}>{runLabel}</span>
             </span>
           </div>
         </div>
@@ -919,7 +1108,7 @@ function BotSidebar({
         <SideRow label={bot.accounts ? "Exchanges" : "Exchange"} value={exchanges} />
         <SideRow label={bot.accounts ? "Accounts" : "Account"} value={(bot.accounts ?? [bot.account]).join(", ")} />
         <SideRow label="Started" value={bot.started} />
-        <SideRow label="Pool start" value={usd(n.poolStart)} />
+        <SideRow label="Pool start" value={<LiveNumber value={n.poolStart} format={(v) => usd(v)} delay={200} />} />
         {bot.type === "v3" && <SideRow label="Strategy" value={`${PRESETS[bot.preset].name} · ±${PRESETS[bot.preset].range}%`} last />}
       </div>
       <div className="flex min-h-0 flex-1 flex-col px-5 pt-6 pb-4">
@@ -930,8 +1119,13 @@ function BotSidebar({
           </button>
         </div>
         <div className="no-scrollbar overflow-y-auto">
-          {[...liveTrades, ...(n.isNew ? n.trades.slice(0, 2).map((t, i) => ({ ...t, ago: ["2m", "6m"][i] })) : n.trades).map((t, i) => ({ ...t, id: `t${i}` }))].slice(0, 8).map((t) => (
-            <div key={t.id} className={cn("flex h-[37px] items-center gap-3", t.id === fresh && "anim-rise")}>
+          {[
+            ...live.fills.map((f) => ({ id: f.id, side: f.side, qty: f.qty, price: f.price, ago: agoOf(f.at), fresh: true, up: f.up })),
+            ...(n.isNew ? n.trades.slice(0, 2).map((t, i) => ({ ...t, ago: ["2m", "6m"][i] })) : n.trades).map((t, i) => ({ ...t, id: `t${i}`, fresh: false, up: true })),
+          ]
+            .slice(0, 12)
+            .map((t) => (
+            <div key={t.id} className={cn("-mx-2 flex h-[37px] items-center gap-3 px-2", t.fresh && "live-row-in", t.fresh && !t.up && "down")}>
               <span className={cn("t-b14 w-12 px-1.5 text-center uppercase", t.side === "Buy" ? "bg-gain/10 text-gain" : "bg-error/10 text-error")}>{t.side}</span>
               <span className="t-b14 flex-1 text-white/80">
                 {t.qty.toFixed(5)} {bot.coin}
@@ -945,7 +1139,7 @@ function BotSidebar({
       <div className="flex flex-col gap-3.5 border-t border-line px-5 pt-5 pb-6">
         <span className="flex items-center gap-2 text-[16px] leading-6 font-medium text-white/80">
           <Icon name="clock" size={24} />
-          {running ? `${bot.runtime === "Just started" ? "Just started" : `${bot.runtime} running`}` : "Stopped"}
+          {running ? <span className="tnum">{formatUptime(live.uptime)} running</span> : "Stopped"}
         </span>
         {running ? (
           <Button variant="danger" className="h-12" iconLeft={<Icon name="square" size={20} />} onClick={onStop} disabled={!!phase}>
@@ -1028,7 +1222,7 @@ function Kpi({ label, value, sub, tone }: { label: string; value: ReactNode; sub
   );
 }
 
-function StatRow({ label, value, chip }: { label: string; value: string; chip: ReactNode }) {
+function StatRow({ label, value, chip }: { label: string; value: ReactNode; chip: ReactNode }) {
   return (
     <div className="flex h-[57px] items-center justify-between border-b border-white/6 px-5">
       <Eyebrow>{label}</Eyebrow>
@@ -1076,7 +1270,7 @@ function InfoRow({ label, value, tone }: { label: string; value: string; tone?: 
   );
 }
 
-function SideRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function SideRow({ label, value, last }: { label: string; value: ReactNode; last?: boolean }) {
   return (
     <div className={cn("flex h-[52px] items-center justify-between gap-3 px-5", !last && "border-b border-white/6")}>
       <Eyebrow>{label}</Eyebrow>

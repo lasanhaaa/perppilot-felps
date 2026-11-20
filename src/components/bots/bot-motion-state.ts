@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MOTION_BY_ID, type MotionStateId } from "@/lib/bot-motion";
 import { botAvatarSignature, type BotAvatar } from "@/lib/bot-avatar";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { useLiveFills, type LiveFill } from "@/lib/live-bots";
 import type { Bot } from "@/lib/mock";
 
 /** A stable number per bot, so two bots in the same state never move in sync. */
@@ -34,15 +35,16 @@ export function freshLook(bots: Pick<Bot, "avatar">[]): BotAvatar {
 type Moment = { state: MotionStateId; key: number };
 
 /**
- * Motion on a grid of bot cards: faces hold still and blink, and one bot at a time plays an order
- * fill every 4–7 s (P&L up, mostly for bots in profit; P&L down otherwise).
+ * Motion on a grid of bot cards: faces hold still and blink, and when a bot fills an order
+ * (live engine, see lib/live-bots.ts) its face plays the fill: P&L up or P&L down, matching the
+ * number that flashes on the card. One face at a time, at most every ~2.5 s, so it stays readable.
  */
 export function useGridMoments(bots: Bot[]) {
   const reduced = useReducedMotion();
   const [moments, setMoments] = useState<Record<string, Moment>>({});
-  const live = useRef({ bots, moments });
+  const live = useRef({ bots, moments, last: 0 });
   useEffect(() => {
-    live.current = { bots, moments };
+    live.current = { ...live.current, bots, moments };
   }, [bots, moments]);
   const key = useRef(0);
 
@@ -61,21 +63,20 @@ export function useGridMoments(bots: Bot[]) {
     );
   }, []);
 
-  useEffect(() => {
-    if (reduced) return;
-    let t = 0;
-    const tick = () => {
-      const { bots: list, moments: m } = live.current;
-      if (!document.hidden && Object.keys(m).length === 0) {
-        const candidates = list.filter((b) => b.status === "in-range" && onScreen(b.id));
-        const bot = candidates[Math.floor(Math.random() * candidates.length)];
-        if (bot) playOn(bot.id, Math.random() < (bot.netFees >= 0 ? 0.75 : 0.35) ? "pnlUp" : "pnlDown");
-      }
-      t = window.setTimeout(tick, 4000 + Math.random() * 3000);
-    };
-    t = window.setTimeout(tick, 1800);
-    return () => window.clearTimeout(t);
-  }, [reduced, playOn]);
+  const onFill = useCallback(
+    (botId: string, fill: LiveFill) => {
+      if (reduced) return;
+      const { bots: list, moments: m, last } = live.current;
+      const now = Date.now();
+      if (Object.keys(m).length > 0 || now - last < 2500) return;
+      const bot = list.find((b) => b.id === botId);
+      if (!bot || bot.status !== "in-range" || !onScreen(bot.id)) return;
+      live.current.last = now;
+      playOn(bot.id, fill.up ? "pnlUp" : "pnlDown");
+    },
+    [reduced, playOn],
+  );
+  useLiveFills(onFill);
 
   return {
     paused: reduced,
