@@ -34,6 +34,7 @@ export function SelectMenu<V extends string>({
   label,
   align = "right",
   className,
+  buttonClassName,
 }: {
   value: V;
   options: Option<V>[];
@@ -42,6 +43,8 @@ export function SelectMenu<V extends string>({
   label: string;
   align?: "left" | "right";
   className?: string;
+  /** Overrides the trigger's look (the new Bots style uses a bordered, rounded box). */
+  buttonClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
@@ -55,7 +58,10 @@ export function SelectMenu<V extends string>({
         aria-expanded={open}
         aria-label={label}
         onClick={() => setOpen((o) => !o)}
-        className="flex h-10 w-full items-center gap-2 bg-fill-2 pr-2 pl-3 text-[14px] text-white/80 transition-colors hover:bg-white/10"
+        className={cn(
+          "flex h-10 w-full items-center gap-2 bg-fill-2 pr-2 pl-3 text-[14px] text-white/80 transition-colors hover:bg-white/10",
+          buttonClassName,
+        )}
       >
         {icon && <Icon name={icon} size={20} className="text-white/60" />}
         <span className="flex-1 truncate text-left">{current?.label}</span>

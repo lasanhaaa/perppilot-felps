@@ -30,6 +30,8 @@ export type Bot = {
   network: "Mainnet" | "Testnet";
   /** Seed for the deterministic mock chart series. */
   seed: number;
+  /** Seed of the generated bot avatar (see src/lib/bot-avatar.ts). */
+  avatarSeed: number;
 };
 
 export type Account = {

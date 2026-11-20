@@ -14,9 +14,16 @@ type ModalProps = {
   /** Green 1px line on top of the panel, as on the "Create a new bot" and video modals. */
   accent?: boolean;
   hideClose?: boolean;
+  /** "bots": the 2026 Bots style (panel #0e1318, 4px radius, 32px title). */
+  tone?: "default" | "bots";
+  /** No padding and no header: the content draws the whole panel. */
+  bare?: boolean;
+  /** Accessible name when there is no visible title. */
+  label?: string;
 };
 
-export function Modal({ open, onClose, title, description, children, className, accent, hideClose }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, className, accent, hideClose, tone = "default", bare, label }: ModalProps) {
+  const bots = tone === "bots";
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -48,21 +55,30 @@ export function Modal({ open, onClose, title, description, children, className, 
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : label}
         tabIndex={-1}
         className={cn(
-          "relative max-h-[92dvh] w-full animate-pop-in overflow-y-auto bg-[#141414] p-6 scrollbar-thin outline-none sm:w-auto",
+          "relative max-h-[92dvh] w-full animate-pop-in overflow-y-auto scrollbar-thin outline-none sm:w-auto",
+          bots ? "rounded-t-[4px] bg-[#0e1318] sm:rounded-[4px]" : "bg-[#141414]",
+          !bare && "p-6",
           accent && "border-t border-brand",
           className,
         )}
       >
-        {(title || !hideClose) && (
-          <div className="mb-6 flex items-start justify-between gap-6">
+        {!bare && (title || !hideClose) && (
+          <div className={cn("flex items-start justify-between gap-6", bots ? "mb-8" : "mb-6")}>
             {title ? (
-              <div className="flex flex-col gap-1">
-                <h2 id={titleId} className="font-display text-[28px] leading-[1.2] tracking-[-0.02em] sm:text-[32px]">
+              <div className={cn("flex flex-col", bots ? "gap-2 pt-2" : "gap-1")}>
+                <h2
+                  id={titleId}
+                  className={cn(
+                    "font-display",
+                    bots ? "text-[28px] leading-[1.05] sm:text-[32px]" : "text-[28px] leading-[1.2] tracking-[-0.02em] sm:text-[32px]",
+                  )}
+                >
                   {title}
                 </h2>
-                {description && <p className="text-[14px] leading-[1.5] text-white/60">{description}</p>}
+                {description && <p className={cn("leading-[1.5] text-white/60", bots ? "text-[16px]" : "text-[14px]")}>{description}</p>}
               </div>
             ) : (
               <span />
