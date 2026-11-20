@@ -106,8 +106,8 @@ function parseRuntime(id: string, runtime: string) {
 
 const isRunning = (b: LiveBot) => b.status === "in-range" || b.status === "out-of-range";
 const holding = (b: LiveBot) => (b.equity * 1.12) / b.price;
-/** Live P&L: net fees plus the position's price move. */
-const PRICE_SHARE = 1;
+/** Live P&L: net fees plus part of the position's price move (the grid sells into rises and buys dips). */
+const PRICE_SHARE = 0.6;
 const pnlOf = (s: Inner, price: number) => s.bot.netFees + s.snap.fees + PRICE_SHARE * holding(s.bot) * (price - s.bot.price);
 /** Price move per tick: up to ±0.025% (BTC moves about $10 a second). */
 const TICK_MOVE = 0.0005;
@@ -136,10 +136,9 @@ function create(bot: LiveBot, mode: Mode): Inner {
   const now = Date.now();
   const baseUptime = parseRuntime(bot.id, bot.runtime);
   const isNew = /just/i.test(bot.runtime);
-  const h = holding(bot);
   // Match what the live part does: fees push up about a fill per candle, the position adds a little noise.
   const trend = bot.netFees >= 0 ? bot.equity * 0.00012 : -bot.equity * 0.00005;
-  const vol = Math.max(0.004, Math.abs(trend) * 3.5, PRICE_SHARE * h * bot.price * TICK_MOVE * 1.1);
+  const vol = Math.max(0.004, Math.abs(trend) * 2.5);
   const count = isNew ? Math.min(WINDOW - 1, Math.max(6, Math.floor(baseUptime / BUCKET_SECONDS))) : WINDOW - 1;
   const pnlHist = history(bot.id, count, bot.netFees, vol, trend, isNew ? 0 : undefined);
   const pv = bot.price * TICK_MOVE * 0.6;
