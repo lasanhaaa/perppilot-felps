@@ -7,7 +7,10 @@ import { BUCKET_SECONDS, type Candle, type Dir } from "@/lib/live-bots";
 const GAIN = "#4ADE80";
 const LOSS = "#FF3737";
 
-export type ChartMode = "line" | "candles";
+export type ChartMode = "line" | "candles" | "pulse" | "bars" | "lines";
+export const CHART_MODES: ChartMode[] = ["line", "candles", "pulse", "bars", "lines"];
+/** Pulse, Trades and Crosshair draw one step per trade (see trade-charts.tsx). */
+export const isTradeMode = (m: ChartMode): m is "pulse" | "bars" | "lines" => m === "pulse" || m === "bars" || m === "lines";
 
 /** The chart type the viewer picked last (Bot Overview and Bot Detail share it). */
 export function useChartMode(): [ChartMode, (m: ChartMode) => void] {
@@ -16,7 +19,7 @@ export function useChartMode(): [ChartMode, (m: ChartMode) => void] {
     try {
       const v = window.localStorage.getItem("perppilot.chart");
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (v === "line" || v === "candles") setMode(v);
+      if (v && (CHART_MODES as string[]).includes(v)) setMode(v as ChartMode);
     } catch {}
   }, []);
   return [
@@ -38,6 +41,9 @@ export function ChartModeSwitch({ value, onChange, className, compact }: { value
         [
           ["line", "Line", <LineGlyph key="l" />],
           ["candles", "Candles", <CandleGlyph key="c" />],
+          ["pulse", "Pulse", <PulseGlyph key="p" />],
+          ["bars", "Trades", <BarsGlyph key="b" />],
+          ["lines", "Crosshair", <CrossGlyph key="x" />],
         ] as const
       ).map(([m, label, glyph]) => (
         <button
@@ -61,6 +67,31 @@ function LineGlyph() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M1.5 12 L5.5 7.5 L8.5 9.5 L14.5 3.5" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+function PulseGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M0.5 10 H4.5 L6 12 L8 3 L10 13 L11.5 10 H15.5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function BarsGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <rect x="1.5" y="9" width="2.5" height="5" />
+      <rect x="5.25" y="7" width="2.5" height="7" />
+      <rect x="9" y="10.5" width="2.5" height="3.5" />
+      <rect x="12.75" y="3" width="2.5" height="11" />
+    </svg>
+  );
+}
+function CrossGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M8 1v4.5M8 10.5V15M1 8h4.5M10.5 8H15" stroke="currentColor" strokeWidth="1.25" />
+      <rect x="6.2" y="6.2" width="3.6" height="3.6" transform="rotate(45 8 8)" stroke="currentColor" strokeWidth="1.25" />
     </svg>
   );
 }
@@ -95,7 +126,9 @@ function frame(candles: Candle[], slots: number) {
   const pts = candles.slice(-(slots + 1));
   // When the window is full, one extra candle sits just off the left edge, so sliding never leaves a gap.
   const first = full ? -1 : 0;
-  return { pts, first, full };
+  // While a new bot has fewer candles than slots, they spread over the whole width (no empty hole).
+  const span = full ? slots : Math.max(2, pts.length);
+  return { pts, first, full, span };
 }
 
 function range(values: number[], padRatio = 0.12) {
@@ -158,8 +191,8 @@ export function LiveSpark({
   const isLine = mode === "line";
   // Fewer, wider candles than line points, so each candle reads at card size.
   const n = isLine ? slots : Math.round(slots * 0.8);
-  const { pts, first, full } = frame(candles, n);
-  const step = isLine ? W / (n - 1) : W / n;
+  const { pts, first, full, span } = frame(candles, n);
+  const step = isLine ? W / (span - 1) : W / span;
   const x = (i: number) => (isLine ? (first + i) * step : (first + i + 0.5) * step);
   const { lo, hi } = range(isLine ? pts.map((c) => c.c) : pts.flatMap((c) => [c.h, c.l]), isLine ? 0.1 : 0.06);
   const pad = 4;
@@ -269,10 +302,10 @@ export function LiveChart({
   const id = useId();
   const W = 971;
   const label = timeLabel ?? ((ago: number) => (ago === 0 ? "Now" : clock(ago * BUCKET_SECONDS)));
-  const { pts, first, full } = frame(candles, slots);
+  const { pts, first, full, span } = frame(candles, slots);
   const ptsMarks = marks ? marks.slice(-(slots + 1)) : undefined;
   const isLine = mode === "line";
-  const step = isLine ? W / (slots - 1) : W / slots;
+  const step = isLine ? W / (span - 1) : W / span;
   const x = (i: number) => (isLine ? (first + i) * step : (first + i + 0.5) * step);
   const vals = isLine ? pts.map((c) => c.c) : pts.flatMap((c) => [c.h, c.l]);
   if (refLine) vals.push(refLine.value);

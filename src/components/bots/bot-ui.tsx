@@ -13,7 +13,8 @@ import { EXCHANGES, ExchangeGlyph, type ExchangeId } from "@/components/ui/excha
 import { Icon } from "@/components/ui/icons";
 import { formatUptime, useLiveBot } from "@/lib/live-bots";
 import { Cents, LiveDot, LiveNumber } from "@/components/live/live-number";
-import { LiveSpark, type ChartMode } from "@/components/live/live-charts";
+import { LiveSpark, isTradeMode, type ChartMode } from "@/components/live/live-charts";
+import { TradeChart } from "@/components/live/trade-charts";
 
 /* ---------- Status pill (no glyphs: status is the tag alone) ---------- */
 
@@ -171,7 +172,11 @@ export function BotCard({
           </div>
         </div>
         <div className="el-area" style={{ animationDelay: `${delay + 200}ms` }}>
-          <LiveSpark candles={l.pnl} mode={chart} bucket={l.bucket} hitK={l.k} hitDir={l.dir} negative={netFees < 0} height={56} />
+          {isTradeMode(chart) ? (
+            <TradeChart style={chart} fees={l.tradeFees} cum={l.tradeCum} k={l.k} dir={l.dir} height={64} slots={24} />
+          ) : (
+            <LiveSpark candles={l.pnl} mode={chart} bucket={l.bucket} hitK={l.k} hitDir={l.dir} negative={netFees < 0} height={64} />
+          )}
         </div>
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-0.5">

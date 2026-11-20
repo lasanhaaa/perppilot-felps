@@ -17,7 +17,8 @@ import type { MotionStateId } from "@/lib/bot-motion";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { formatUptime, liveFill, useLiveBot, useLiveFills, type LiveFill, type LiveSnap } from "@/lib/live-bots";
 import { Cents, LiveDot, LiveNumber } from "@/components/live/live-number";
-import { ChartModeSwitch, LiveBadge, LiveChart, toCandles, useChartMode } from "@/components/live/live-charts";
+import { ChartModeSwitch, LiveBadge, LiveChart, isTradeMode, toCandles, useChartMode } from "@/components/live/live-charts";
+import { TradeChart } from "@/components/live/trade-charts";
 import { CoinIcon } from "@/components/ui/coin";
 import { EXCHANGES } from "@/components/ui/exchange-logo";
 import { Icon } from "@/components/ui/icons";
@@ -437,7 +438,7 @@ function SimpleView({
         <section className="flex min-h-[369px] flex-col gap-5 rounded-sm border border-line bg-card p-5">
           <div className="flex items-center justify-between gap-3">
             <span className="whitespace-nowrap">
-              <Eyebrow>{period === "Live" ? "Live P&L · 5s" : "Earnings over time"}</Eyebrow>
+              <Eyebrow>{period === "Live" ? (chart === "lines" ? "Net fees · each trade" : isTradeMode(chart) ? "Fee per trade" : "Live P&L · 5s") : "Earnings over time"}</Eyebrow>
             </span>
             <div className="flex items-center gap-2">
               <ChartModeSwitch value={chart} onChange={setChart} compact />
@@ -451,7 +452,19 @@ function SimpleView({
               </div>
             </div>
           </div>
-          {period === "Live" ? (
+          {period === "Live" && isTradeMode(chart) ? (
+            <TradeChart
+              style={chart}
+              fees={live.tradeFees}
+              cum={live.tradeCum}
+              k={live.k}
+              dir={live.dir}
+              height={260}
+              slots={40}
+              axis
+              format={fmtMoney}
+            />
+          ) : period === "Live" ? (
             <LiveChart
               candles={live.pnl}
               mode={chart}
@@ -554,6 +567,11 @@ function SimpleView({
       </div>
     </>
   );
+}
+
+/** "$0.12", "-$0.04". */
+function fmtMoney(v: number) {
+  return (v < 0 ? "-" : "") + "$" + money(Math.abs(v));
 }
 
 /** Open orders and holding after the live fills: a filled buy becomes a sell one level up, and the other way round. */
@@ -876,7 +894,7 @@ function AdvancedView({ bot }: { bot: Bot }) {
               <LiveChart
                 candles={live.priceCandles}
                 marks={live.marks}
-                mode={chart}
+                mode={chart === "candles" ? "candles" : "line"}
                 bucket={live.bucket}
                 hitK={live.k}
                 height={520}

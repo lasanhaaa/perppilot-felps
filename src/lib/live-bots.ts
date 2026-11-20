@@ -40,6 +40,10 @@ export type LiveSnap = {
   dir: Dir;
   /** Newest first. */
   fills: LiveFill[];
+  /** Fee of each trade, oldest first (seeded history, then live fills). One entry per trade. */
+  tradeFees: number[];
+  /** Net fees after each trade, oldest first (same length as tradeFees). */
+  tradeCum: number[];
   /** Live P&L in 5-second candles, oldest first, last one forming. */
   pnl: Candle[];
   /** Price in 5-second candles, oldest first, last one forming. */
@@ -132,6 +136,32 @@ function history(id: string, count: number, end: number, vol: number, trend: num
   return out;
 }
 
+const TRADES = 48;
+
+/** The bot's last trades before the page opened: mostly small gains, ending at its net fees. */
+/** One trade's fee. Winning bots make bigger gains than losses; losing bots the other way round. */
+function tradeFee(bot: LiveBot, up: boolean, r: number) {
+  const winning = bot.netFees >= 0;
+  const [lo, hi] = up ? (winning ? [0.00006, 0.0003] : [0.00004, 0.00016]) : winning ? [0.00003, 0.00012] : [0.00008, 0.0003];
+  return (up ? 1 : -1) * bot.equity * (lo + r * (hi - lo));
+}
+
+function tradeHistory(bot: LiveBot, isNew: boolean) {
+  // A just-started bot has only placed its grid: its chart starts flat at zero and grows with each fill.
+  if (isNew) return { tradeFees: [0, 0], tradeCum: [0, 0] };
+  const r = seeded(`${bot.id}:trades`);
+  const count = TRADES - 1;
+  const winRate = bot.netFees >= 0 ? 0.8 : 0.4;
+  const tradeFees = Array.from({ length: count }, () => tradeFee(bot, r() < winRate, r()));
+  const tradeCum: number[] = [];
+  let c = bot.netFees;
+  for (let i = count - 1; i >= 0; i--) {
+    tradeCum.unshift(c);
+    c -= tradeFees[i];
+  }
+  return { tradeFees, tradeCum };
+}
+
 function create(bot: LiveBot, mode: Mode): Inner {
   const now = Date.now();
   const baseUptime = parseRuntime(bot.id, bot.runtime);
@@ -141,6 +171,7 @@ function create(bot: LiveBot, mode: Mode): Inner {
   const vol = Math.max(0.004, Math.abs(trend) * 2.5);
   const count = isNew ? Math.min(WINDOW - 1, Math.max(6, Math.floor(baseUptime / BUCKET_SECONDS))) : WINDOW - 1;
   const pnlHist = history(bot.id, count, bot.netFees, vol, trend, isNew ? 0 : undefined);
+  const { tradeFees, tradeCum } = tradeHistory(bot, isNew);
   const pv = bot.price * TICK_MOVE * 0.6;
   const priceHist = history(`${bot.id}:px`, WINDOW - 1, bot.price, pv, 0);
   const r = seeded(`${bot.id}:marks`);
@@ -168,6 +199,8 @@ function create(bot: LiveBot, mode: Mode): Inner {
       k: 0,
       dir: null,
       fills: [],
+      tradeFees,
+      tradeCum,
       pnl: [...pnlHist, { o: bot.netFees, h: bot.netFees, l: bot.netFees, c: bot.netFees }],
       priceCandles: [...priceHist, { o: bot.price, h: bot.price, l: bot.price, c: bot.price }],
       marks: [...marks, null],
@@ -186,8 +219,10 @@ function emit() {
 function fillNow(s: Inner, forceUp?: boolean) {
   const b = s.bot;
   if (!isRunning(b)) return;
-  const up = forceUp ?? Math.random() < (b.netFees >= 0 ? 0.85 : 0.45);
-  const fee = up ? b.equity * rand(0.00006, 0.0003) : -b.equity * rand(0.00003, 0.00012);
+  // A fresh grid captures the spread first: a just-started bot's first fills are always gains.
+  const fresh = /just/i.test(b.runtime) && s.snap.trades < 3;
+  const up = forceUp ?? (fresh || Math.random() < (b.netFees >= 0 ? 0.85 : 0.45));
+  const fee = tradeFee(b, up, Math.random());
   const side: "Buy" | "Sell" = s.snap.priceDir === "down" ? "Buy" : s.snap.priceDir === "up" ? "Sell" : Math.random() < 0.5 ? "Buy" : "Sell";
   const fill: LiveFill = {
     id: `${b.id}-fill-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -218,6 +253,8 @@ function fillNow(s: Inner, forceUp?: boolean) {
     k: prev.k + 1,
     dir: up ? "up" : "down",
     fills: [fill, ...prev.fills].slice(0, 12),
+    tradeFees: [...prev.tradeFees, fee].slice(-TRADES),
+    tradeCum: [...prev.tradeCum, fees + b.netFees].slice(-TRADES),
     pnl,
     marks,
   };
