@@ -122,6 +122,8 @@ export type Pose = {
   /** Head turn to the side (1 = 90°, the far eye disappears) and full spins. */
   turn: number;
   spin: number;
+  /** Head nod: up (−) or down (+), 1 = 90°. The eyes slide up or down the head sphere. */
+  nod: number;
   /** Where the eyes look, inside the face. */
   gx: number;
   gy: number;
@@ -155,14 +157,14 @@ export type Pose = {
 };
 
 export const REST: Pose = {
-  x: 0, y: 0, rot: 0, sx: 1, sy: 1, sq: 0, tilt: 0, turn: 0, spin: 0, gx: 0, gy: 0,
+  x: 0, y: 0, rot: 0, sx: 1, sy: 1, sq: 0, tilt: 0, turn: 0, spin: 0, nod: 0, gx: 0, gy: 0,
   openL: 1, openR: 1, eye: 1, alpha: 1,
   dots: 0, zzz: 0, alert: 0, notify: 0, burst: 0, check: 0, checkA: 0, checkPop: 0, ring: 0, orbit: 0,
   send: 0, sendDir: 1, arrow: 0, arrowDir: -1, pnl: 0, pnlRise: 0, pnlSign: 1,
 };
 
 /** Fields scaled by the intensity control (deviation from rest). Extras keep their size. */
-export const MOTION_FIELDS = ["x", "y", "rot", "sq", "tilt", "turn", "gx", "gy"] as const;
+export const MOTION_FIELDS = ["x", "y", "rot", "sq", "tilt", "turn", "nod", "gx", "gy"] as const;
 
 export type MotionContext = {
   /** Per-bot noise, so two bots in the same state never move in sync. */
@@ -404,7 +406,7 @@ export const MOTION_STATES: readonly MotionState[] = [
     name: "Running",
     group: "Lifecycle",
     when: "The bot is active and in range, nothing to report.",
-    motion: "Breathes, blinks, glances around: the eyes dart first, the head follows and it shifts its weight. Looks at the pointer when it is near.",
+    motion: "Breathes, blinks, glances around: the eyes dart first, the head follows and it shifts its weight. Looks at the pointer in any direction: to the sides, up, down and on the diagonals.",
     where: "Bot Detail header only (one bot on screen). On the Bots grid the face stays still and only blinks.",
     kind: "loop",
     blink: [3.2, 6.5],
@@ -413,8 +415,9 @@ export const MOTION_STATES: readonly MotionState[] = [
       const g = ctx.look
         ? { gx: ctx.look.x, gy: ctx.look.y, turn: ctx.look.x * 0.45, tilt: ctx.look.x * -2 }
         : glances(t, ctx.seed, 2.9, (n) => idlePick(ctx.seed, n));
+      // The head nods with the eyes, so up, down and diagonals read as clearly as the sides.
       // It shifts its weight toward where it looks; the renderer adds the drag lean.
-      return { ...breathe(t + (ctx.seed % 3)), ...g, x: g.turn * 5 };
+      return { ...breathe(t + (ctx.seed % 3)), ...g, nod: g.gy * 0.4, x: g.turn * 5 };
     },
   },
   {
@@ -735,7 +738,7 @@ export const MOTION_STATES: readonly MotionState[] = [
     name: "Looks at you",
     group: "Attention",
     when: "The user hovers or edits the avatar.",
-    motion: "Head and eyes follow the pointer: it turns to the side, looks up and down, tilts with you. Without a pointer it looks around in quick glances.",
+    motion: "Head and eyes follow the pointer in every direction: it turns to the side, nods up and down, looks along the diagonals and tilts with you. Without a pointer it looks around in quick glances.",
     where: "Avatar editor preview, Bot Detail header on hover.",
     kind: "loop",
     blink: [2.5, 5],
@@ -745,7 +748,7 @@ export const MOTION_STATES: readonly MotionState[] = [
       const g = ctx.look
         ? { gx: ctx.look.x, gy: ctx.look.y, turn: ctx.look.x * 0.62, tilt: -ctx.look.x * 3 + ctx.look.y * 2 }
         : glances(t, ctx.seed, 1.4, (n) => lookAroundPick(ctx.seed, n));
-      return { ...breathe(t, 3.2, 0.5), ...g, x: g.gx * 4, y: g.gy * 1.2 };
+      return { ...breathe(t, 3.2, 0.5), ...g, nod: g.gy * 0.5, x: g.gx * 4, y: g.gy * 1.2 };
     },
   },
   {
