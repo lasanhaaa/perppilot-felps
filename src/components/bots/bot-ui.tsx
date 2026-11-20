@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { BOT_TYPE_LABEL, STATUS_LABEL, money, signedUsd, usd, type Bot, type BotStatus, type Coin } from "@/lib/mock";
 import { MotionFace } from "@/components/bot-motion/motion-face";
@@ -11,7 +11,10 @@ import { botSeed, quietState } from "./bot-motion-state";
 import { CoinIcon } from "@/components/ui/coin";
 import { EXCHANGES, ExchangeGlyph, type ExchangeId } from "@/components/ui/exchange-logo";
 import { Icon } from "@/components/ui/icons";
-import { FluidSparkline, Sparkline } from "@/components/charts";
+import { formatUptime, useLiveBot } from "@/lib/live-bots";
+import { Cents, LiveDot, LiveNumber } from "@/components/live/live-number";
+import { LiveSpark } from "@/components/live/live-charts";
+import { CrosshairChart } from "@/components/live/crosshair-chart";
 
 /* ---------- Status pill (no glyphs: status is the tag alone) ---------- */
 
@@ -87,6 +90,8 @@ export function BotCard({
   className,
   motion,
   playKey,
+  live = true,
+  index = 0,
 }: {
   bot: Bot;
   href?: string;
@@ -95,8 +100,29 @@ export function BotCard({
   /** What the face does now (an order fill on the grid); quiet by default. */
   motion?: MotionStateId;
   playKey?: number;
+  /** Live numbers, chart and clock (off for static previews). */
+  live?: boolean;
+  /** Position in the grid, for the staggered entrance. */
+  index?: number;
 }) {
   const [hovered, setHovered] = useState(false);
+  const l = useLiveBot(bot, "grid", live);
+  const isNew = bot.runtime === "Just started";
+  const netFees = bot.netFees + l.fees;
+  const running = bot.status !== "stopped";
+  const paused = bot.status === "error";
+  const delay = 120 + index * 70;
+  // The card's edge lights up when its bot fills an order.
+  const ref = useRef<HTMLElement>(null);
+  const seenK = useRef(l.k);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || l.k === seenK.current) return;
+    seenK.current = l.k;
+    el.classList.remove("live-hit", "live-hit-down");
+    void el.offsetWidth;
+    el.classList.add(l.dir === "down" ? "live-hit-down" : "live-hit");
+  }, [l.k, l.dir]);
   const body = (
     <>
       <div className="flex h-[106px] items-center gap-4 border-b border-line px-5">
@@ -115,30 +141,66 @@ export function BotCard({
       <div className="flex flex-col gap-5 px-5 pt-7 pb-5">
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[24px] leading-[30px] font-semibold tracking-[-0.01em]">{signedUsd(bot.netFees)}</span>
+            <LiveNumber
+              value={netFees}
+              format={(n) => signedUsd(n)}
+              delay={delay}
+              k={l.k}
+              dir={l.dir}
+              bump
+              className="text-[24px] leading-[30px] font-semibold tracking-[-0.01em]"
+            />
             <span className="t-b14 uppercase opacity-40">Net fees</span>
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            {bot.runtime === "Just started" ? <span className="text-[24px] leading-[30px] text-white/40">—</span> : <span className={cn("text-[24px] leading-[30px]", bot.apr < 0 ? "text-error" : "text-gain")}>{fmtPct(bot.apr)}</span>}
+            {isNew ? (
+              <span className="text-[24px] leading-[30px] text-white/40">—</span>
+            ) : (
+              <LiveNumber
+                value={bot.apr + l.apr}
+                format={fmtPct}
+                delay={delay}
+                k={l.k}
+                dir={l.dir}
+                className={cn("-mr-1 text-[24px] leading-[30px]", bot.apr < 0 ? "text-error" : "text-gain")}
+              />
+            )}
             <span className="t-b14 uppercase opacity-40">APR</span>
           </div>
         </div>
-        <FluidSparkline values={bot.spark} height={56} negative={bot.netFees < 0} />
+        <div className="el-area" style={{ animationDelay: `${delay + 200}ms` }}>
+          <CrosshairChart fees={l.tradeFees} cum={l.tradeCum} k={l.k} dir={l.dir} height={64} slots={24} />
+        </div>
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[18px] leading-[24px]">{usd(bot.equity)}</span>
+            <LiveNumber
+              value={bot.equity + l.equity}
+              render={(n) => <Cents n={n} />}
+              delay={delay}
+              k={l.k}
+              dir={l.dir}
+              className="text-[18px] leading-[24px]"
+            />
             <span className="t-b14 uppercase opacity-40">Current equity</span>
           </div>
           <span className="flex items-center gap-2">
             <Icon name="clock" size={20} className="text-white/80" />
-            <span className="t-b16">{bot.status === "stopped" ? "—" : bot.runtime}</span>
-            <span className="t-b14 uppercase opacity-40">{bot.status === "stopped" ? "Stopped" : "Running"}</span>
+            <span className="t-b16 tnum">{running ? (live && !paused ? formatUptime(l.uptime) : bot.runtime) : "—"}</span>
+            {running ? (
+              <span className={cn("t-b14 flex items-center gap-1.5 uppercase", paused ? "text-error" : "text-success")}>
+                <LiveDot on={live && !paused} />
+                <span className={cn(live && !paused && "live-breathe")}>{paused ? "Paused" : "Running"}</span>
+              </span>
+            ) : (
+              <span className="t-b14 uppercase opacity-40">Stopped</span>
+            )}
           </span>
         </div>
       </div>
     </>
   );
-  const cls = cn("flex flex-col rounded-sm border border-line bg-card text-left transition-colors hover:border-white/20 hover:bg-white/[0.035]", className);
+  const cls = cn("flex flex-col rounded-sm border border-line bg-card text-left transition-colors hover:border-white/20 hover:bg-white/[0.035]", live && "el-in", className);
+  const style = live ? ({ "--i": index } as CSSProperties) : undefined;
   const hover = {
     "data-bot-id": bot.id,
     onPointerEnter: (e: React.PointerEvent) => e.pointerType === "mouse" && setHovered(true),
@@ -146,12 +208,12 @@ export function BotCard({
   };
   if (href)
     return (
-      <Link href={href} className={cls} {...hover}>
+      <Link ref={ref as React.Ref<HTMLAnchorElement>} href={href} className={cls} style={style} {...hover}>
         {body}
       </Link>
     );
   return (
-    <button type="button" onClick={onClick} className={cls} {...hover}>
+    <button ref={ref as React.Ref<HTMLButtonElement>} type="button" onClick={onClick} className={cls} style={style} {...hover}>
       {body}
     </button>
   );
@@ -159,7 +221,9 @@ export function BotCard({
 
 /* ---------- Table ("Your bots") ---------- */
 
-export const BOT_COLS = "grid grid-cols-[300px_260px_200px_150px_160px_130px_minmax(120px,1fr)] items-center px-5";
+/** Columns shrink down to their minimum on smaller screens (laptops); past that the table scrolls inside its card. */
+export const BOT_COLS =
+  "grid grid-cols-[minmax(210px,300px)_minmax(150px,260px)_minmax(130px,200px)_minmax(90px,150px)_minmax(90px,160px)_minmax(70px,130px)_minmax(120px,1fr)] items-center px-5";
 
 export function BotTableHeader() {
   return (
@@ -177,6 +241,7 @@ export function BotTableHeader() {
 
 export function BotTableRow({ bot, last }: { bot: Bot; last?: boolean }) {
   const [hovered, setHovered] = useState(false);
+  const l = useLiveBot(bot);
   return (
     <Link
       href={`/bots/${bot.id}`}
@@ -200,11 +265,23 @@ export function BotTableRow({ bot, last }: { bot: Bot; last?: boolean }) {
       <span>
         <StatusPill status={bot.status} />
       </span>
-      <span className="t-b14 tnum text-right">{usd(bot.equity)}</span>
-      <span className="t-b14 tnum text-right text-gain">{signedUsd(bot.earned)}</span>
-      {bot.runtime === "Just started" ? <span className="t-b14 tnum text-right text-white/40">—</span> : <span className={cn("t-b14 tnum text-right", bot.apr < 0 ? "text-error" : "text-gain")}>{fmtPct(bot.apr)}</span>}
+      <span className="t-b14 tnum text-right">
+        <LiveNumber value={bot.equity + l.equity} format={(n) => usd(n)} k={l.k} dir={l.dir} />
+      </span>
+      <span className="t-b14 tnum text-right text-gain">
+        <LiveNumber value={bot.earned + l.fees} format={(n) => signedUsd(n)} k={l.k} dir={l.dir} />
+      </span>
+      {bot.runtime === "Just started" ? (
+        <span className="t-b14 tnum text-right text-white/40">—</span>
+      ) : (
+        <span className={cn("t-b14 tnum text-right", bot.apr < 0 ? "text-error" : "text-gain")}>
+          <LiveNumber value={bot.apr + l.apr} format={fmtPct} k={l.k} dir={l.dir} />
+        </span>
+      )}
       <span className="flex justify-end">
-        <Sparkline values={bot.spark} width={120} height={28} negative={bot.netFees < 0} />
+        <span className="w-[120px]">
+          <LiveSpark candles={l.pnl} mode="line" bucket={l.bucket} hitK={l.k} hitDir={l.dir} negative={bot.netFees + l.fees < 0} height={28} slots={20} />
+        </span>
       </span>
     </Link>
   );

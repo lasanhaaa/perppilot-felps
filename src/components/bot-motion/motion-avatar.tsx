@@ -30,6 +30,8 @@ const GAIN = "#4ADE80";
  * smaller sphere (88% of their half width), so turning eyes stay on the face.
  */
 const SPHERE = 22;
+/** The rig's viewBox: room around the 56 × 56 face for hops, tilts and the extras. */
+const VB = { x: -22, y: -28, size: 100 };
 /** Seconds to blend from the last pose into a new state. */
 const BLEND = 0.45;
 
@@ -47,6 +49,7 @@ const SPRINGS = {
   sx: { f: 7.5, z: 0.38 },
   sy: { f: 7.5, z: 0.38 },
   yaw: { f: 6, z: 0.72 },
+  nod: { f: 6, z: 0.72 },
   gx: { f: 16, z: 0.9 },
   gy: { f: 16, z: 0.9 },
   eye: { f: 10, z: 0.5 },
@@ -94,6 +97,37 @@ function onFrame(tick: Tick) {
   };
 }
 
+/**
+ * How far both eyes can slide up and down and stay whole inside the head: walks the eye boxes
+ * through the head's fill, so a notch (Moth, Bolt) or the arch between the legs (Walker) stops
+ * them. Falls back to the head's box where the browser can't test the fill.
+ */
+function eyeRoom(body: SVGGeometryElement, eyes: DOMRect[], bb: DOMRect) {
+  const MARGIN = 1;
+  const top = Math.min(...eyes.map((e) => e.y));
+  const bottom = Math.max(...eyes.map((e) => e.y + e.height));
+  const box = { up: Math.max(1, top - bb.y - MARGIN), down: Math.max(1, bb.y + bb.height - bottom - MARGIN) };
+  if (typeof body.isPointInFill !== "function") return box;
+  const fill = (x: number, y: number) => {
+    try {
+      return body.isPointInFill(new DOMPoint(x, y));
+    } catch {
+      return true;
+    }
+  };
+  // Points on and just around each eye that sit inside the head at rest must stay inside.
+  const points = eyes
+    .flatMap((e) => [0, 0.25, 0.5, 0.75, 1].flatMap((fx) => [-MARGIN, 0.5 * e.height, e.height + MARGIN].map((fy) => [e.x + e.width * fx, e.y + fy] as const)))
+    .filter(([x, y]) => fill(x, y));
+  const inside = (d: number) => points.every(([x, y]) => fill(x, y + d));
+  const walk = (dir: 1 | -1, max: number) => {
+    let d = 0;
+    while (d + 0.5 <= max && inside(dir * (d + 0.5))) d += 0.5;
+    return Math.max(1, d);
+  };
+  return { up: walk(-1, box.up), down: walk(1, box.down) };
+}
+
 // ── Pointer, shared ────────────────────────────────────────────────────────────
 const pointer = { x: 0, y: 0, at: -1e9 };
 let pointerBound = false;
@@ -133,6 +167,8 @@ type Geometry = {
   left: number;
   right: number;
   eyes: { x: number; y: number }[];
+  /** How far the eyes can slide up and down and stay whole inside the head (notches and arches count). */
+  room: { up: number; down: number };
   /** Character faces: brow and mouth centers. */
   brows: { x: number; y: number }[];
   mouth: { x: number; y: number } | null;
@@ -258,6 +294,7 @@ export function MotionAvatar({
       left: bb.x,
       right: bb.x + bb.width,
       eyes: eyeEls.map(centerOf),
+      room: eyeRoom(body, eyeEls.map((g) => (g.firstElementChild as SVGPathElement).getBBox()), bb),
       brows: browEls.map(centerOf),
       mouth: mouthEl ? centerOf(mouthEl) : null,
     };
@@ -347,10 +384,13 @@ export function MotionAvatar({
       const sinY = Math.sin(yaw);
       const cosY = Math.cos(yaw);
       const sq = 1 - 0.06 * Math.abs(sinY);
+      // A nod foreshortens the head the same way a turn narrows it.
+      const pitch = p.nod * (Math.PI / 2);
+      const sqN = 1 - 0.06 * Math.abs(Math.sin(pitch));
 
       el.rig.setAttribute(
         "transform",
-        `translate(${n(p.x)} ${n(p.y)}) translate(28 ${n(bottom)}) rotate(${n(p.rot)}) scale(${n(p.sx * sq)} ${n(p.sy)}) translate(-28 ${n(-bottom)})`,
+        `translate(${n(p.x)} ${n(p.y)}) translate(28 ${n(bottom)}) rotate(${n(p.rot)}) scale(${n(p.sx * sq)} ${n(p.sy * sqN)}) translate(-28 ${n(-bottom)})`,
       );
       el.rig.setAttribute("opacity", `${n(clamp(p.alpha, 0, 1))}`);
       el.tilt.setAttribute("transform", `rotate(${n(p.tilt)} ${fx} ${fy})`);
@@ -360,6 +400,22 @@ export function MotionAvatar({
       el.shade.setAttribute("opacity", `${n(0.36 * Math.abs(sinY) * shading)}`);
       el.lit.setAttribute("transform", `translate(${n(sinY * 9 * (R / SPHERE))} 0)`);
       el.back.setAttribute("opacity", `${n(0.32 * Math.max(0, -cosY) * shading)}`);
+
+      // The nod rotates the sphere up and down: features slide along it and flatten a little.
+      const nodAt = (y: number) => {
+        const th = Math.asin(clamp((y - fy) / R, -0.97, 0.97));
+        const th2 = clamp(th + pitch, -1.45, 1.45);
+        // Half the true foreshortening: the eyes keep their shape and still read as turned.
+        return { dy: R * (Math.sin(th2) - Math.sin(th)), hf: 1 - 0.5 * (1 - Math.max(0, Math.cos(th2) / Math.cos(th))) };
+      };
+      // The eyes never leave the head: up and down, the slide eases into the room the head has.
+      // Small moves pass untouched; past 60% of the room they ease in and never reach the edge.
+      const keepIn = (d: number) => {
+        const room = d < 0 ? geo.room.up : geo.room.down;
+        const knee = room * 0.6;
+        const a = Math.abs(d);
+        return a <= knee ? d : Math.sign(d) * (knee + (room - knee) * Math.tanh((a - knee) / (room - knee)));
+      };
 
       // Eyes on the head sphere: longitude = eye offset, the turn rotates the sphere.
       geo.eyes.forEach((e, i) => {
@@ -372,14 +428,15 @@ export function MotionAvatar({
         const sy = parts.closedScale + (1 - parts.closedScale) * open;
         const k = p.eye;
         const ox = p.gx * 2.8 * Math.max(0.3, depth);
-        const oy = p.gy * 2.4;
+        const nd = nodAt(e.y);
+        const oy = keepIn(nd.dy + p.gy * 2.4);
         const g = parts.grid;
         el.eyes[i].setAttribute(
           "transform",
           g
             ? // Cell grid: the eyes jump from cell to cell, like a display, and never squeeze sideways.
               `translate(${n(e.x + snap(px + ox - e.x, g))} ${n(e.y + snap(oy, g))}) scale(1 ${n(sy)}) translate(${n(-e.x)} ${n(-e.y)})`
-            : `translate(${n(px + ox)} ${n(e.y + oy)}) scale(${n(Math.max(0.001, wf * k))} ${n(sy * k)}) translate(${n(-e.x)} ${n(-e.y)})`,
+            : `translate(${n(px + ox)} ${n(e.y + oy)}) scale(${n(Math.max(0.001, wf * k))} ${n(sy * k * nd.hf)}) translate(${n(-e.x)} ${n(-e.y)})`,
         );
         el.eyes[i].setAttribute("opacity", `${n(clamp(depth * 8, 0, 1))}`);
       });
@@ -404,7 +461,7 @@ export function MotionAvatar({
           const open = clamp(i === 0 ? p.openL : p.openR, 0, 1);
           const side = i === 0 ? -1 : 1;
           const think = i === 1 ? -2.6 * p.dots : 0.5 * p.dots;
-          const dy = p.gy * 1.2 + lift + 1.6 * (1 - open) + think;
+          const dy = p.gy * 1.2 + nodAt(b.y).dy + lift + 1.6 * (1 - open) + think;
           const ang = side * (13 * worry - 8 * p.send) + (i === 1 ? -7 * p.dots : 0);
           el.brows[i].setAttribute(
             "transform",
@@ -420,7 +477,7 @@ export function MotionAvatar({
         const sy = 1 + 0.3 * worry;
         el.mouth.setAttribute(
           "transform",
-          `translate(${n(s.px + glance * 0.25)} ${n(m.y + p.gy * 0.7)}) scale(${n(s.wf * sx)} ${n(sy)}) translate(${n(-m.x)} ${n(-m.y)})`,
+          `translate(${n(s.px + glance * 0.25)} ${n(m.y + p.gy * 0.7 + nodAt(m.y).dy)}) scale(${n(s.wf * sx)} ${n(sy)}) translate(${n(-m.x)} ${n(-m.y)})`,
         );
         el.mouth.setAttribute("opacity", `${n(clamp(s.depth * 8, 0, 1))}`);
       }
@@ -596,14 +653,20 @@ export function MotionAvatar({
       if (c.state !== rt.state || c.playKey !== rt.key) reset(rt, c, true);
       const def = MOTION_BY_ID[rt.state];
 
-      // Pointer direction, relative to this avatar, smoothed.
+      // Pointer direction from the eyes, smoothed. Any angle: the length saturates, the angle is
+      // kept, so a pointer below or on a diagonal is looked at right there.
       const wantsPointer = def.pointer || (c.followPointer && def.id === "idle");
       const active = wantsPointer && performance.now() - pointer.at < 2500;
       if (active) {
         const r = svg.getBoundingClientRect();
         const span = Math.max(220, r.width * 1.2);
-        const tx = clamp((pointer.x - (r.left + r.width / 2)) / span);
-        const ty = clamp((pointer.y - (r.top + r.height * 0.45)) / span);
+        let tx = (pointer.x - (r.left + (r.width * (geo.cx - VB.x)) / VB.size)) / span;
+        let ty = (pointer.y - (r.top + (r.height * (geo.cy - VB.y)) / VB.size)) / span;
+        const len = Math.hypot(tx, ty);
+        if (len > 1) {
+          tx /= len;
+          ty /= len;
+        }
         const k = 1 - Math.exp(-dt * 10);
         rt.look.x += (tx - rt.look.x) * k;
         rt.look.y += (ty - rt.look.y) * k;
@@ -676,7 +739,7 @@ export function MotionAvatar({
       // 2. Follow-through: springs carry every channel toward its keyed value.
       const goal = {
         x: target.x, y: target.y, rot: target.rot, tilt: target.tilt, sx: target.sx, sy: target.sy,
-        yaw: rt.yawT, gx: target.gx, gy: target.gy, eye: target.eye,
+        yaw: rt.yawT, nod: target.nod, gx: target.gx, gy: target.gy, eye: target.eye,
       };
       if (!rt.springs || c.paused) {
         rt.springs = Object.fromEntries(SPRING_KEYS.map((k) => [k, { x: goal[k], v: 0 }])) as Springs;
@@ -751,7 +814,7 @@ export function MotionAvatar({
       ref={svgRef}
       width={size}
       height={size}
-      viewBox="-22 -28 100 100"
+      viewBox={`${VB.x} ${VB.y} ${VB.size} ${VB.size}`}
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}

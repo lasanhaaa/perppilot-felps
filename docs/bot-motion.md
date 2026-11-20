@@ -11,6 +11,8 @@ so the whole head can turn, spin, hop, lean, squash and stretch. Moving only the
 | Part | What it does |
 | --- | --- |
 | Head turn | Eyes are projected on a sphere (radius 22 face units). Turning moves both eyes toward the side, narrows the far eye and hides it past 90°. The visor squeezes the same way. A dark crescent shows the side of the head; the back of the head is darker and has no face. |
+| Head nod | The same sphere tilts up and down: the eyes slide up or down it and flatten a little, and the head foreshortens like it narrows on a turn. Each head measures how far its eyes can slide and stay whole inside it (notches and the arch between Walker's legs count), and the slide eases into that room. |
+| Pointer | Direction from the eyes to the pointer, any angle: the length saturates and the angle is kept, so a pointer below, above or on a diagonal is looked at right there. Running nods 0.4 × the vertical look, Looks at you 0.5 ×. |
 | Spin | A full turn of the head (back of the head shows halfway). Used for New bot, Order filled and Connecting. |
 | Body | Move, lean (pivot at the feet), squash and stretch (pivot at the feet), head tilt (pivot at the face center). A floor spot shrinks when the bot is in the air. |
 | Eyes | Gaze inside the face, opening per eye (wink), size (surprise). Blink = 320 ms, closes in 42%, opens in 58%, random gap per state, 18% double blinks. |
@@ -44,7 +46,7 @@ How the motion is built so it reads like an animator's work, not a formula:
 | --- | --- | --- | --- |
 | New bot | Once | Bot just created | Pops out of the ground with an overshoot, face spins into place, burst, wink |
 | Starting | Once | User presses Start | Eyes flutter open, stretch, looks left and right, small hop |
-| Running | Loop | Active and in range | Breathes, blinks, glances, turns its head and shifts its weight; follows the pointer when near |
+| Running | Loop | Active and in range | Breathes, blinks, glances, turns its head and shifts its weight; follows the pointer in any direction (sides, up, down, diagonals) |
 | Stopping | Once | User stops the bot | Looks at you, two heavy blinks, eyes close, sinks, dims |
 | Stopped | Loop | Status Stopped | Eyes closed, slow breathing, leaning, z's |
 | Connecting exchange | Loop | Checking API keys | Full head spins with a pause facing you, two orbiting squares |
@@ -55,7 +57,7 @@ How the motion is built so it reads like an animator's work, not a formula:
 | Fill · P&L up | Once | A fill closes with a gain | The Order filled jump and spin; on landing a + in earnings green (#4ADE80) pops out of the head and floats up (decelerating) with green bits, happy eyes, brows up, proud tilt |
 | Fill · P&L down | Once | A fill closes with a loss | Flinch (dips, squints, leans away), a − in red (#FF3737) drops past its side (accelerating) with red bits, eyes follow it down, worried brows, two small head shakes, a nod and back to work. Composed, never sad |
 | Done | Once | User task finished (never tied to profit) | Two nods, content eyes, check draws, tilt |
-| Looks at you | Loop | Hover or editing the avatar | Head and eyes follow the pointer; figure eight without one |
+| Looks at you | Loop | Hover or editing the avatar | Head and eyes follow the pointer in any direction, the head turns and nods; quick glances without one |
 | Waiting for you | Loop | User action needed, nothing broken | Wide eyes, double hop, curious tilts, notification dot |
 | Out of range | Loop | Status Out of range | Double take, then turns and leans toward the price (up/down), red arrow |
 | Needs help | Loop | Status Error | Head shake, droops and looks down, looks up at you, red ! |

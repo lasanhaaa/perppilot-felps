@@ -74,7 +74,7 @@ export default function BotsPage() {
         title="Bot Overview"
         description="Your grouped bots, organized by what they actually do."
         actions={
-          <Button variant="white" href="/create-bot" className="h-12 px-[27px]" iconLeft={<Icon name="add-diamond" size={24} />}>
+          <Button variant="white" size="sm" href="/create-bot" iconLeft={<Icon name="add-diamond" size={16} />}>
             New bot
           </Button>
         }
@@ -138,8 +138,8 @@ export default function BotsPage() {
             </div>
             {s.bots.length ? (
               <div className="grid grid-cols-3 gap-4 px-14">
-                {s.bots.map((b) => (
-                  <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} motion={grid.motionOf(b)} playKey={grid.keyOf(b)} />
+                {s.bots.map((b, i) => (
+                  <BotCard key={b.id} bot={b} href={`/bots/${b.id}`} motion={grid.motionOf(b)} playKey={grid.keyOf(b)} index={i} />
                 ))}
               </div>
             ) : (

@@ -1,10 +1,11 @@
 export type ExchangeId = "nado" | "hyperliquid" | "lighter" | "extended";
 
-export const EXCHANGES: Record<ExchangeId, { name: string }> = {
-  nado: { name: "Nado" },
-  hyperliquid: { name: "Hyperliquid" },
-  lighter: { name: "Lighter" },
-  extended: { name: "Extended" },
+/** `color`: the exchange's chart color, taken from its logo (Nado and Lighter have black and white marks, so they get white and grey). */
+export const EXCHANGES: Record<ExchangeId, { name: string; color: string }> = {
+  nado: { name: "Nado", color: "#ececee" },
+  hyperliquid: { name: "Hyperliquid", color: "#99ffe2" },
+  lighter: { name: "Lighter", color: "#6e6e76" },
+  extended: { name: "Extended", color: "#2abb78" },
 };
 
 const marks: Record<ExchangeId, { bg: string; body: React.ReactNode }> = {

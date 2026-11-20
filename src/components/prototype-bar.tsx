@@ -29,6 +29,8 @@ const SCREENS: [string, string][] = [
   ["Explore Liquidity", "/explore"],
   ["Explore · by market", "/explore/markets"],
   ["Course", "/course"],
+  ["Leaderboard · Seasonal", "/leaderboard"],
+  ["Leaderboard · Global", "/leaderboard/global"],
 ];
 
 export function PrototypeBar() {

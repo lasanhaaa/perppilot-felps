@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { cn } from "@/lib/cn";
 
 const GAIN = "#4ADE80";
@@ -64,6 +65,51 @@ export function FluidSparkline({ values, height = 56, negative }: { values: numb
   );
 }
 
+/** Eases the last value of a series toward its new target, so a live chart end glides instead of jumping. */
+function useLiveTail(values: number[], enabled: boolean) {
+  const reduced = useReducedMotion();
+  const target = values[values.length - 1];
+  const [tail, setTail] = useState(target);
+  const cur = useRef(target);
+  useEffect(() => {
+    if (!enabled || reduced) {
+      cur.current = target;
+      setTail(target);
+      return;
+    }
+    const from = cur.current;
+    if (from === target) return;
+    let raf = 0;
+    let t0 = 0;
+    const step = (now: number) => {
+      if (!t0) t0 = now;
+      const t = Math.min(1, (now - t0) / 600);
+      const v = from + (target - from) * (1 - Math.pow(1 - t, 3));
+      cur.current = v;
+      setTail(v);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, enabled, reduced]);
+  return useMemo(() => (enabled ? [...values.slice(0, -1), tail] : values), [values, tail, enabled]);
+}
+
+/** Restarts a CSS animation class on an element each time `k` changes (nothing remounts). */
+function useRestartClass<T extends HTMLElement>(k: number | undefined, cls: string) {
+  const ref = useRef<T>(null);
+  const seen = useRef(k);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || k === undefined || k === seen.current) return;
+    seen.current = k;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }, [k, cls]);
+  return ref;
+}
+
 /** Equity / earnings area chart with a hover crosshair and tooltip (Overview Performance card). */
 export function AreaChart({
   values,
@@ -73,6 +119,8 @@ export function AreaChart({
   format,
   tooltip,
   startIndex,
+  live,
+  pulseKey,
 }: {
   values: number[];
   labels: string[];
@@ -81,9 +129,15 @@ export function AreaChart({
   format: (v: number) => string;
   tooltip: (i: number) => ReactNode;
   startIndex?: number;
+  /** The last point is "now": it glides to new values and its marker pings. */
+  live?: boolean;
+  /** Bump on each fill: the end marker flashes. */
+  pulseKey?: number;
 }) {
   const id = useId();
   const W = 971;
+  values = useLiveTail(values, !!live);
+  const flash = useRestartClass<HTMLSpanElement>(pulseKey, "chart-hit");
   const lo = Math.min(...yTicks);
   const hi = Math.max(...yTicks);
   const { d, pts } = path(values, W, height, 0, lo, hi);
@@ -123,7 +177,13 @@ export function AreaChart({
               </>
             )}
           </svg>
-          <span className="absolute size-2 bg-gain" style={{ left: `calc(${(last[0] / W) * 100}% - 4px)`, top: last[1] - 4 }} />
+          {live && hover === null && (
+            <span className="pointer-events-none absolute inset-x-0 border-t border-dashed border-gain/35" style={{ top: last[1] }} />
+          )}
+          <span className="absolute size-2" style={{ left: `calc(${(last[0] / W) * 100}% - 4px)`, top: last[1] - 4 }}>
+            {live && <span className="live-ping absolute inset-0 bg-gain" />}
+            <span ref={flash} className="absolute inset-0 bg-gain" />
+          </span>
           {hp && hover !== null && (
             <>
               <span
@@ -183,13 +243,20 @@ export function BarChart({
   height = 200,
   tooltip,
   startIndex,
+  live,
+  pulseKey,
 }: {
   values: number[];
   labels: string[];
   height?: number;
   tooltip: (i: number) => ReactNode;
   startIndex?: number;
+  /** The last bar is today: it grows smoothly, stays bright and flashes on each fill. */
+  live?: boolean;
+  pulseKey?: number;
 }) {
+  values = useLiveTail(values, !!live);
+  const flash = useRestartClass<HTMLSpanElement>(pulseKey, "chart-hit");
   const ticks = [40, 30, 20, 10, 0, -10];
   const hi = 40;
   const lo = -10;
@@ -208,9 +275,16 @@ export function BarChart({
               <div key={i} className="relative flex-1" onMouseEnter={() => setHover(i)}>
                 {hover === i && <span className="absolute inset-y-0 left-[2px] right-[2px] bg-white/4" />}
                 <span
-                  className={cn("absolute left-1/2 w-[68%] max-w-[22px] -translate-x-1/2", v >= 0 ? (hover === i ? "bg-gain" : "bg-gain/55") : hover === i ? "bg-error" : "bg-error/70")}
+                  ref={live && i === values.length - 1 ? flash : undefined}
+                  className={cn(
+                    "absolute left-1/2 w-[68%] max-w-[22px] -translate-x-1/2",
+                    v >= 0 ? (hover === i || (live && i === values.length - 1) ? "bg-gain" : "bg-gain/55") : hover === i ? "bg-error" : "bg-error/70",
+                  )}
                   style={v >= 0 ? { top: y(v), height: y(0) - y(v) } : { top: y(0), height: y(v) - y(0) }}
                 />
+                {live && i === values.length - 1 && v >= 0 && (
+                  <span className="live-breathe absolute left-1/2 h-0.5 w-[68%] max-w-[22px] -translate-x-1/2 bg-white" style={{ top: y(v) - 3 }} />
+                )}
                 {hover === i && v >= 0 && <span className="absolute left-1/2 h-0.5 w-[68%] max-w-[22px] -translate-x-1/2 bg-white" style={{ top: y(v) }} />}
               </div>
             ))}
@@ -244,45 +318,75 @@ export function BarChart({
 }
 
 /** Greyscale donut (Exchange allocation). */
-export function Donut({ segments, size = 216, center }: { segments: { value: number; shade: string; label: string; labelDark?: boolean }[]; size?: number; center: ReactNode }) {
+/** Thin-ring donut. Percentages live in the legend; hovering a segment (or its legend row via `active`) names it in the center. */
+export function Donut({
+  segments,
+  size = 216,
+  thickness = 20,
+  center,
+  active,
+  onActive,
+}: {
+  segments: { value: number; shade: string; label: string; name?: string }[];
+  size?: number;
+  thickness?: number;
+  center: ReactNode;
+  active?: number | null;
+  onActive?: (i: number | null) => void;
+}) {
+  const [hoverSelf, setHoverSelf] = useState<number | null>(null);
+  const hover = active ?? hoverSelf;
+  const setHover = (i: number | null) => {
+    setHoverSelf(i);
+    onActive?.(i);
+  };
   const total = segments.reduce((a, s) => a + s.value, 0);
   const R = size / 2;
-  const r = R * 0.39;
+  const r = R - thickness;
   const arcs = useMemo(() => {
     let a0 = 0;
+    const single = segments.length === 1;
     return segments.map((s) => {
       const a1 = a0 + (s.value / total) * Math.PI * 2;
-      const gap = 0.012;
+      // ~2px gap between segments, whatever the radius.
+      const gap = single ? 0 : 1 / R;
       const p = (a: number, rad: number) => [R + rad * Math.sin(a), R - rad * Math.cos(a)];
+      const end = single ? a1 - 0.0001 : a1 - gap;
       const [x0, y0] = p(a0 + gap, R);
-      const [x1, y1] = p(a1 - gap, R);
-      const [x2, y2] = p(a1 - gap, r);
+      const [x1, y1] = p(end, R);
+      const [x2, y2] = p(end, r);
       const [x3, y3] = p(a0 + gap, r);
       const large = a1 - a0 > Math.PI ? 1 : 0;
-      const mid = (a0 + a1) / 2;
-      const [lx, ly] = p(mid, (R + r) / 2);
       const d = `M${x0} ${y0}A${R} ${R} 0 ${large} 1 ${x1} ${y1}L${x2} ${y2}A${r} ${r} 0 ${large} 0 ${x3} ${y3}Z`;
       a0 = a1;
-      return { d, lx, ly, s };
+      return { d, s };
     });
   }, [segments, total, R, r]);
+  const hovered = hover != null ? segments[hover] : null;
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative" style={{ width: size, height: size }} onMouseLeave={() => setHover(null)}>
       <svg width={size} height={size} aria-hidden>
-        {arcs.map(({ d, s }) => (
-          <path key={s.label} d={d} fill={s.shade} />
+        {arcs.map(({ d, s }, i) => (
+          <path
+            key={i}
+            d={d}
+            fill={s.shade}
+            onMouseEnter={() => setHover(i)}
+            className="transition-opacity duration-150"
+            style={{ opacity: hover == null || hover === i ? 1 : 0.25 }}
+          />
         ))}
       </svg>
-      {arcs.map(({ lx, ly, s }) => (
-        <span
-          key={s.label}
-          className={cn("absolute -translate-x-1/2 -translate-y-1/2 text-[12px] leading-[15px] font-medium", s.labelDark ? "text-black" : "text-white")}
-          style={{ left: lx, top: ly }}
-        >
-          {s.label}
-        </span>
-      ))}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-center">{center}</div>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-center">
+        {hovered ? (
+          <>
+            <span className="tnum text-[18px] leading-[27px] font-medium">{hovered.label}</span>
+            {hovered.name && <span className="text-[12px] leading-[15px] font-medium text-white/55">{hovered.name}</span>}
+          </>
+        ) : (
+          center
+        )}
+      </div>
     </div>
   );
 }

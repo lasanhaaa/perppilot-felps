@@ -136,12 +136,12 @@ function Panel({
     <div ref={ref} data-lines-panel onFocusCapture={onFocus} onInputCapture={onInput} className="relative z-20 w-full max-w-[516px]">
       <div
         className={cn(
-          "overflow-hidden bg-screen transition-[height,opacity,transform] duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          "overflow-hidden lines-card transition-[height,opacity,transform] duration-[480ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
           leaving && "scale-[0.985] opacity-0",
         )}
         style={{ height: height ?? undefined }}
       >
-        <div ref={inner} className="p-6 sm:p-10">
+        <div ref={inner} className="lines-pad p-6 sm:p-10">
           <div key={routeKey} className="anim-rise">
             {children}
           </div>

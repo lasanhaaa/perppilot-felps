@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AuthHeading } from "@/components/auth/auth-shell";
 import { useLines } from "@/components/auth/lines-shell";
-import { BrandIcon, CandleIcon } from "@/components/ui/icons";
+import { CandleIcon, Web3UniverseMark } from "@/components/ui/icons";
 import { Button, Field } from "@/components/ui/primitives";
 import { useStore } from "@/lib/store";
 
@@ -53,19 +53,14 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
-      <div className="flex gap-5">
-        {(["google", "apple"] as const).map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={enter}
-            className="t-b14 flex h-[50px] flex-1 items-center justify-center gap-2 rounded-sm border border-line bg-raised font-medium text-white/90 transition-colors hover:border-white/20 hover:bg-hover"
-          >
-            <BrandIcon name={p} />
-            Login with {p === "google" ? "Google" : "Apple"}
-          </button>
-        ))}
-      </div>
+      <button
+        type="button"
+        onClick={enter}
+        className="t-b14 flex h-[50px] w-full items-center justify-center gap-2.5 rounded-sm border border-line bg-raised font-medium text-white/90 transition-colors hover:border-white/20 hover:bg-hover"
+      >
+        <Web3UniverseMark size={20} />
+        Login with Web3 Universe
+      </button>
     </form>
   );
 }
