@@ -474,7 +474,7 @@
 /* Auth panel: a card surface a step above the canvas, opaque so the field lines pass behind it. */
 .lines-card {
   background:
-    linear-gradient(rgb(255 255 255 / 0.035), rgb(255 255 255 / 0.035)),
+    linear-gradient(rgb(255 255 255 / 0.02), rgb(255 255 255 / 0.02)),
     var(--color-screen);
 }
 .crosshair-icon {
