@@ -465,6 +465,18 @@
 .lines-cursor [data-cursor-auto] * {
   cursor: auto;
 }
+/* Auth panel padding tightens on short screens so the questions fit without scrolling. */
+@media (min-width: 640px) and (max-height: 860px) {
+  .lines-pad {
+    padding: 32px;
+  }
+}
+/* Auth panel: a card surface a step above the canvas, opaque so the field lines pass behind it. */
+.lines-card {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.035), rgb(255 255 255 / 0.035)),
+    var(--color-screen);
+}
 .crosshair-icon {
   color: rgb(255 255 255 / 0.9);
   transition:
@@ -495,11 +507,14 @@
 .crosshair-hairlines {
   transition: opacity 180ms ease;
 }
-/* Over a button, link or field the pointer turns into the brackets. */
-.crosshair-target .crosshair-icon,
+/* Over a button, link or field the brackets lock onto it and the hairlines and coordinates step
+   aside; the pointer itself stays, with a soft shadow so it reads on the mint buttons too. */
 .crosshair-target .crosshair-label,
 .crosshair-target .crosshair-hairlines {
   opacity: 0;
+}
+.crosshair-target .crosshair-icon {
+  filter: drop-shadow(0 0 1.5px rgb(0 0 0 / 0.7));
 }
 .crosshair-down .crosshair-icon,
 .crosshair-down .crosshair-brackets {

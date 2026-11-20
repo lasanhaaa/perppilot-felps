@@ -10,10 +10,11 @@ import { useEffect, useRef } from "react";
  * - Faint full-viewport hairlines stop short of it (they never meet at the cursor) and pass over
  *   everything, the panel included.
  * - The coordinates sit next to it as plain text, no box. Mint marks follow it on the rulers.
- * - Hovering a button, link or field: the pointer sticks to the element and disappears into it;
- *   four small squares appear just inside its corners and expand outwards into brackets around
- *   it, as if selecting it. Pressing tightens the brackets and turns them mint. Leaving shrinks
- *   them back into small squares that fade where they were, and the pointer comes back.
+ * - Hovering a button, link or field: four small squares appear just inside its corners and
+ *   expand outwards into brackets around it, as if selecting it. The hairlines and coordinates
+ *   step aside, the pointer itself stays (felipe 2026-11-20: hiding it hurt usability). Pressing
+ *   tightens the brackets and turns them mint. Leaving shrinks them back into small squares that
+ *   fade where they were, and the hairlines come back.
  * - Inside a text field the normal I-beam comes back so typing feels normal.
  * Mouse and pen only.
  */

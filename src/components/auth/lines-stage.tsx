@@ -58,7 +58,7 @@ export function useHandoffPhase(): HandoffPhase {
   return useContext(StageContext)?.phase ?? null;
 }
 
-const COVER_HOLD = 380; // ms the brackets fly before the platform is revealed
+const COVER_HOLD = 600; // ms the brackets fly (and the lines hold the logo) before the platform is revealed
 const REVEAL_TIME = 1150; // ms until the platform entrance has finished
 
 export function LinesStage({ children }: { children: ReactNode }) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, type RefObject } from "react";
+import { LOGO_MARK_PATH } from "@/components/ui/icons";
 
 /**
  * Field lines behind the auth panel ("Auth / Shell · Lines", Figma 2247:4472).
@@ -12,7 +13,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, type RefObject } fr
  * - bend away from the mouse and light up around it,
  * - carry pulses: two mint loops, faint ambient ones, a burst on every screen change and a small
  *   ping on each keystroke,
- * - straighten out ("release") when the user leaves the auth flow.
+ * - on leaving the auth flow ("release"), converge into the middle of the screen where the
+ *   PerpPilot mark acts as a clipping mask, so the lines form the logo (felipe 2026-11-20).
  */
 
 export type FieldHandle = {
@@ -139,6 +141,9 @@ export const LinesField = forwardRef<FieldHandle, { panel: RefObject<HTMLElement
     const REVEAL = reduced ? 0 : 1100;
     let rel = 0; // release progress
     let releasing = false;
+    // The logo the lines form on release: centre and height in px, frozen when it starts.
+    let logo: { x: number; y: number; size: number; at: number } | null = null;
+    const logoPath = new Path2D(LOGO_MARK_PATH);
     const pulses: Pulse[] = [];
     let ambientIn = rand(1.6, 3);
 
@@ -185,7 +190,8 @@ export const LinesField = forwardRef<FieldHandle, { panel: RefObject<HTMLElement
       },
       release() {
         releasing = true;
-        api.current.burst(1);
+        logo = { x: W / 2, y: H / 2, size: Math.max(180, Math.min(320, Math.min(W, H) * 0.3)), at: performance.now() };
+        api.current.burst(0.35); // a few pulses only, so the logo stays the moment
       },
     };
 
@@ -196,8 +202,8 @@ export const LinesField = forwardRef<FieldHandle, { panel: RefObject<HTMLElement
       last = now;
       const ease = (k: number) => (reduced ? 1 : 1 - Math.pow(1 - k, dt * 60));
 
-      // Ease panel rect and mouse.
-      const tgt = read();
+      // Ease panel rect and mouse. Once released the panel is on its way out, so the rect holds.
+      const tgt = releasing ? rect : read();
       const kr = ease(0.16);
       rect = {
         x0: rect.x0 + (tgt.x0 - rect.x0) * kr,
@@ -234,7 +240,10 @@ export const LinesField = forwardRef<FieldHandle, { panel: RefObject<HTMLElement
       const nBotA = H - inset - 22;
       const nBotB = Math.min(nBotA - 3 * span, rect.y1 + 28);
       const flat = 1 - easeOut(rel);
-      const A = 26 * cur.infl;
+      // Logo progress: the lines converge into evenly spaced rows across the logo's height.
+      const lt = logo ? (now - logo.at) / 1000 : 0;
+      const form = logo ? smoother(clamp01((lt - 0.05) / 0.8)) : 0;
+      const A = 26 * cur.infl * (1 - form);
       const sig2 = 2 * 80 * 80;
 
       for (const l of lines) {
@@ -259,6 +268,11 @@ export const LinesField = forwardRef<FieldHandle, { panel: RefObject<HTMLElement
               y += A * Math.tanh(dy / 14) * Math.exp(-(dx * dx + dy * dy) / sig2);
             }
           }
+          if (form > 0 && logo) {
+            const j = l.top ? l.k : 2 * N - 1 - l.k;
+            const row = logo.y - logo.size / 2 + ((j + 0.5) * logo.size) / (2 * N);
+            y += (row - y) * form;
+          }
           l.ys[i] = y;
         }
       }
@@ -281,7 +295,7 @@ export const LinesField = forwardRef<FieldHandle, { panel: RefObject<HTMLElement
         const rh = reveal(li);
         if (rh <= 0) return;
         const color = l.mint ? MINT : WHITE;
-        const base = (l.mint ? 0.42 : l.alpha) + 0.12 * rel;
+        const base = ((l.mint ? 0.42 : l.alpha) + 0.12 * rel) * (1 - 0.7 * form);
         if (glow) {
           const gr = ctx.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, 240);
           gr.addColorStop(0, `rgba(${color},${Math.min(1, base + (l.mint ? 0.4 : 0.2) * cur.infl)})`);
@@ -303,6 +317,30 @@ export const LinesField = forwardRef<FieldHandle, { panel: RefObject<HTMLElement
         }
         ctx.stroke();
       });
+
+      // The logo: mint rows clipped by the PerpPilot mark, sweeping out from the centre. The
+      // converged field lines land on every third row, so the logo reads as made of the lines.
+      if (logo && form > 0) {
+        const s = logo.size / 20.8;
+        ctx.save();
+        ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (logo.x - 22.24 * s), dpr * (logo.y - 10.4 * s));
+        ctx.clip(logoPath);
+        ctx.fillStyle = `rgba(${MINT},${0.05 * form})`;
+        ctx.fill(logoPath);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const sweep = easeOut(clamp01((lt - 0.15) / 0.7));
+        const half = logo.size * 0.55 * sweep;
+        const gap = logo.size / (6 * N);
+        ctx.strokeStyle = `rgba(${MINT},${0.9 * sweep})`;
+        ctx.beginPath();
+        for (let r = 0; r < 6 * N; r++) {
+          const y = Math.round(logo.y - logo.size / 2 + (r + 0.5) * gap) + 0.5;
+          ctx.moveTo(logo.x - half, y);
+          ctx.lineTo(logo.x + half, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Pulses.
       if (!reduced) {
