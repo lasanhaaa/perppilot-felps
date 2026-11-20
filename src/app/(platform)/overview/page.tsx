@@ -514,7 +514,8 @@ function RunningOverview() {
                 />
               )}
             </div>
-            <div className="flex flex-col">
+            {/* Same height on both tabs: the legend always has room for the longer list (45px rows). */}
+            <div className="flex flex-col" style={{ minHeight: Math.max(byExchange.length, byType.length) * 45 }}>
               {split === "exchange"
                 ? byExchange.map((r, i) => (
                     <LegendRow
