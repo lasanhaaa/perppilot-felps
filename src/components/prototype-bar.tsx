@@ -27,6 +27,7 @@ const SCREENS: [string, string][] = [
   ["Bot detail", "/bots/bot-btc"],
   ["Accounts", "/accounts"],
   ["Explore Liquidity", "/explore"],
+  ["Explore · table view", "/explore?view=table"],
   ["Explore · by market", "/explore/markets"],
   ["Course", "/course"],
   ["Leaderboard · Seasonal", "/leaderboard"],

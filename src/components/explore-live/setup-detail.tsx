@@ -26,28 +26,32 @@ import { AssetIcon, EntryPill, RangeMeter, TrendingTag } from "./parts";
  * Setup detail, made for a first-time user: what it earned, where the price is in the range,
  * and one button to start a bot with it. Opens from a card or a shared /explore?setup=<id> link.
  */
-export function SetupDetail({ setup, onClose }: { setup: Setup; onClose: () => void }) {
+/** Link to start a bot with a setup (or set up the profile first) and a copy-link action. */
+export function useSetupActions(setup: Setup) {
   const { hasProfile } = useStore();
   const [copied, setCopied] = useState(false);
-  const series = useMemo(() => aprSeries(setup, 30), [setup]);
-  const labels = useMemo(() => dayLabels(30), []);
-  const yTicks = useMemo(() => ticksFor(series), [series]);
-  const cats = categoriesOf(setup.id).map((c) => c.name);
   const market = MARKETS.includes(setup.coin as never) ? `&market=${setup.coin}` : "";
   const href = hasProfile ? `/create-bot?type=v3${market}&exchange=${setup.exchange}` : "/setup";
-
   useEffect(() => {
     if (!copied) return;
     const t = setTimeout(() => setCopied(false), 2000);
     return () => clearTimeout(t);
   }, [copied]);
-
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/explore?setup=${setup.id}`);
     } catch {}
     setCopied(true);
   };
+  return { hasProfile, href, copied, copy };
+}
+
+export function SetupDetail({ setup, onClose }: { setup: Setup; onClose: () => void }) {
+  const { hasProfile, href, copied, copy } = useSetupActions(setup);
+  const series = useMemo(() => aprSeries(setup, 30), [setup]);
+  const labels = useMemo(() => dayLabels(30), []);
+  const yTicks = useMemo(() => ticksFor(series), [series]);
+  const cats = categoriesOf(setup.id).map((c) => c.name);
 
   const rows: [string, string, string?][] = [
     ["Range exits · 7D", String(setup.exits)],
@@ -143,7 +147,7 @@ function Figure({ label, value, sub, gain, divider }: { label: string; value: st
 }
 
 /** Four round y-axis ticks around the series. */
-function ticksFor(values: number[]) {
+export function ticksFor(values: number[]) {
   const lo = Math.min(...values);
   const hi = Math.max(...values);
   const raw = (hi - lo) / 3 || 1;

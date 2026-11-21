@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { cn } from "@/lib/cn";
-import { Icon } from "@/components/ui/icons";
 import { FluidSparkline } from "@/components/charts";
 import { ExchangeTag } from "@/components/bots/bot-ui";
 import { EXCHANGE_NAME, aprFmt, aprSeries, pair, ptsFmt, type Setup } from "./data";
@@ -66,55 +65,5 @@ function Fact({ label, value, end }: { label: string; value: string; end?: boole
       <span className="t-b16 tnum">{value}</span>
       <span className="t-l12 text-white/40">{label}</span>
     </div>
-  );
-}
-
-/* ---------- List view: the same setups as a table, like "Your bots" ---------- */
-
-const COLS = "grid grid-cols-[minmax(240px,2.2fr)_128px_1fr_1fr_minmax(150px,1.5fr)_0.8fr_0.8fr_0.7fr_0.8fr_24px] items-center gap-4 px-5";
-
-export function SetupTableHeader() {
-  const h: ReactNode[] = ["Setup", "Entry", "APR · 30D", "Change · 7D", "Price range", "In range", "Exits · 7D", "Fee", "Running", ""];
-  return (
-    <div className={cn(COLS, "t-l12 h-11 border-b border-line text-white/40")}>
-      {h.map((x, i) => (
-        <span key={i} className={cn(i >= 2 && i !== 4 && i < 9 && "text-right")}>
-          {x}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-export function SetupTableRow({ setup, onOpen, last }: { setup: Setup; onOpen: (id: string) => void; last?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(setup.id)}
-      aria-label={`${pair(setup)} on ${EXCHANGE_NAME[setup.exchange]}, APR ${setup.apr.toFixed(1)}%`}
-      className={cn(COLS, "t-b14 h-[68px] w-full text-left transition-colors hover:bg-white/[0.03]", !last && "border-b border-white/6")}
-    >
-      <span className="flex min-w-0 items-center gap-3">
-        <AssetIcon coin={setup.coin} size={28} />
-        <span className="flex min-w-0 flex-col gap-1">
-          <span className="flex items-center gap-2">
-            <span className="t-b16m">{pair(setup)}</span>
-            {setup.trending && <TrendingTag />}
-          </span>
-          <ExchangeTag exchange={setup.exchange} glyph size="sm" className="self-start" />
-        </span>
-      </span>
-      <span>
-        <EntryPill entry={setup.entry} />
-      </span>
-      <span className="t-b16 text-right text-gain tnum">{aprFmt(setup.apr)}</span>
-      <span className={cn("text-right tnum", setup.d7 >= 0 ? "text-gain" : "text-error")}>{ptsFmt(setup.d7)}</span>
-      <RangeMeter setup={setup} size="sm" />
-      <span className="text-right tnum">{setup.inRange}%</span>
-      <span className="text-right tnum">{setup.exits}</span>
-      <span className="text-right tnum">{setup.fee.toFixed(1)}%</span>
-      <span className="text-right text-white/60 tnum">{setup.runtime} days</span>
-      <Icon name="arrow-right" size={18} className="justify-self-end text-white/40" />
-    </button>
   );
 }

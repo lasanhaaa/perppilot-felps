@@ -8,9 +8,10 @@ import { Dropdown, EmptyState } from "@/components/ui/primitives";
 import { Icon } from "@/components/ui/icons";
 import { InfoButton } from "@/components/ui/tooltip";
 import type { ExchangeId } from "@/components/ui/exchange-logo";
-import { CATEGORIES, EXCHANGE_NAME, SETUPS, type Category, type CategoryId, type Setup } from "@/components/explore-live/data";
+import { CATEGORIES, EXCHANGE_NAME, SETUPS, type Asset, type Category, type CategoryId, type Setup } from "@/components/explore-live/data";
 import { CategoryGlyph } from "@/components/explore-live/parts";
-import { SetupCard, SetupTableHeader, SetupTableRow } from "@/components/explore-live/setup-card";
+import { SetupCard } from "@/components/explore-live/setup-card";
+import { SetupPanel, SetupTable, groupByCoin } from "@/components/explore-live/setup-table";
 import { SetupDetail } from "@/components/explore-live/setup-detail";
 
 /*
@@ -47,7 +48,8 @@ function order(list: Setup[], g: Goal) {
 }
 
 type Tab = "all" | CategoryId;
-type Layout = "grid" | "list";
+/** Cards (like Bot Overview) or Table (like the v1 market table, with the selected setup in a right panel). */
+type Layout = "grid" | "table";
 /** Setups each category shows on the All tab; the rest are one click away on its own tab. */
 const PREVIEW = 3;
 
@@ -66,17 +68,45 @@ export default function ExplorePage() {
   const [goal, setGoal] = useState<Goal>("best");
   const [layout, setLayout] = useState<Layout>("grid");
   const [open, setOpen] = useState<string | null>(null);
+  /** Table view: the setup shown in the right panel and the coins expanded into exchange rows. */
+  const [picked, setPicked] = useState<string | null>(null);
+  const [openCoins, setOpenCoins] = useState<Set<Asset>>(() => new Set<Asset>(["ETH"]));
 
-  // A shared link (/explore?setup=<id>) opens that setup.
+  // A shared link (/explore?setup=<id>) opens that setup; ?view=table opens the Table view.
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("setup");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("setup");
+    if (params.get("view") === "table") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLayout("table");
+      if (id && SETUPS[id]) {
+        setPicked(id);
+        setOpenCoins((cur) => new Set(cur).add(SETUPS[id].coin));
+      }
+      return;
+    }
     if (id && SETUPS[id]) setOpen(id);
   }, []);
   const openSetup = useCallback((id: string) => {
     setOpen(id);
     window.history.replaceState(null, "", `/explore?setup=${id}`);
   }, []);
+  const toggleCoin = (coin: Asset) =>
+    setOpenCoins((cur) => {
+      const n = new Set(cur);
+      if (n.has(coin)) n.delete(coin);
+      else n.add(coin);
+      return n;
+    });
+  const switchLayout = (l: Layout) => {
+    // The panel takes over from the pop-up: a setup open in Cards stays selected in Table.
+    if (l === "table" && open) {
+      setPicked(open);
+      setOpenCoins((cur) => new Set(cur).add(SETUPS[open].coin));
+      setOpen(null);
+    }
+    setLayout(l);
+  };
   const close = useCallback(() => {
     setOpen(null);
     window.history.replaceState(null, "", "/explore");
@@ -117,12 +147,19 @@ export default function ExplorePage() {
 
   const current = tab === "all" ? null : CATEGORIES.find((c) => c.id === tab)!;
   const setup = open ? SETUPS[open] : null;
+  const table = layout === "table";
+  const tableRows = current ? rowsOf(current) : allRows;
+  const groups = useMemo(() => groupByCoin(tableRows), [tableRows]);
+  /** The picked setup while it is still listed, else the first row. */
+  const panelSetup = tableRows.find((s) => s.id === picked) ?? tableRows[0] ?? null;
+  const pad = table ? "px-8" : "px-14";
 
   return (
-    <>
+    <div className="flex min-h-screen">
+      <div className="min-w-0 flex-1">
       <PageHeader
         border={false}
-        className="min-h-[101px]"
+        className={cn("min-h-[101px]", pad)}
         title="Explore Liquidity"
         description="V3 setups from our reference bots, ranked by risk-adjusted score."
         actions={
@@ -133,23 +170,23 @@ export default function ExplorePage() {
         }
       />
 
-      <div className="flex flex-col px-14 pb-16">
+      <div className={cn("flex flex-col pb-16", pad)}>
         {/* Summary, like the Overview header figures */}
         <div className="flex border-y border-line py-6">
           <Stat label="Setups tracked" value={String(ALL.length)} sub={`On ${stats.exchanges} exchanges`} first />
           <Stat
             label="Median APR"
             value={`+${stats.medianApr.toFixed(1)}%`}
-            sub="Last 30 days, after fees"
+            sub="30D, after fees"
             gain
             info="APR is the past result of paper reference bots after your plan's fees. Not a promise of future returns."
           />
-          <Stat label="Time in range" value={`${stats.inRange.toFixed(1)}%`} sub="Average, last 30 days" />
-          <Stat label="Good entry now" value={String(stats.good)} sub="Price low in its range" />
+          <Stat label="Time in range" value={`${stats.inRange.toFixed(1)}%`} sub="Average, 30D" />
+          <Stat label="Good entry now" value={String(stats.good)} sub="Price low in range" />
         </div>
 
         {/* Categories as tabs (like Bot Overview), then one row of filters */}
-        <div className="flex flex-wrap items-center gap-2 pt-6">
+        <div className="flex flex-wrap items-center gap-1 pt-6">
           <TabButton on={tab === "all"} onClick={() => setTab("all")} icon={<Icon name="grid" size={18} />} label="All setups" count={allRows.length} />
           {CATEGORIES.map((c) => (
             <TabButton key={c.id} on={tab === c.id} onClick={() => setTab(c.id)} icon={<CategoryGlyph icon={c.icon} />} label={c.name} count={rowsOf(c).length} />
@@ -182,22 +219,46 @@ export default function ExplorePage() {
           )}
           <span className="flex-1" />
           <span className="flex h-10 border border-line p-1">
-            {(["grid", "list"] as const).map((v) => (
+            {(["grid", "table"] as const).map((v) => (
               <button
                 key={v}
                 type="button"
-                aria-label={`${v} view`}
+                aria-label={v === "grid" ? "Cards view" : "Table view"}
+                title={v === "grid" ? "Cards" : "Table"}
                 aria-pressed={layout === v}
-                onClick={() => setLayout(v)}
+                onClick={() => switchLayout(v)}
                 className={cn("flex w-8 items-center justify-center transition-colors", layout === v ? "bg-white/10 text-white" : "text-white/40 hover:text-white/80")}
               >
-                <Icon name={v} size={16} />
+                <Icon name={v === "grid" ? "grid" : "list"} size={16} />
               </button>
             ))}
           </span>
         </div>
 
-        {current ? (
+        {table ? (
+          <div className="flex flex-col gap-4 pt-6">
+            {tableRows.length === 0 ? (
+              current ? (
+                <NoSetups cat={current} filtered={filtered} onReset={reset} big />
+              ) : (
+                <EmptyState
+                  className="min-h-[360px]"
+                  icon="search"
+                  title="No setups match these filters"
+                  description="Try another exchange or view, or clear the search."
+                  action={
+                    <button type="button" onClick={reset} className="t-b14 h-10 rounded-sm border border-line px-3.5 text-white/80 transition-colors hover:bg-hover">
+                      Reset filters
+                    </button>
+                  }
+                />
+              )
+            ) : (
+              <SetupTable groups={groups} open={openCoins} onToggle={toggleCoin} selected={panelSetup?.id ?? null} onSelect={setPicked} />
+            )}
+            <p className="t-b14 text-white/40">A coin row shows its best setup. Open it to compare exchanges.</p>
+          </div>
+        ) : current ? (
           <div className="flex flex-col gap-6 pt-9">
             <SectionTitle cat={current} right={<InfoButton label={`About ${current.name}`} tip={current.info} />} />
             <Setups rows={rowsOf(current)} layout={layout} onOpen={openSetup} empty={<NoSetups cat={current} filtered={filtered} onReset={reset} big />} />
@@ -244,15 +305,17 @@ export default function ExplorePage() {
           </div>
         )}
       </div>
+      </div>
 
-      {setup && <SetupDetail setup={setup} onClose={close} />}
-    </>
+      {table && panelSetup && <SetupPanel setup={panelSetup} />}
+      {setup && !table && <SetupDetail setup={setup} onClose={close} />}
+    </div>
   );
 }
 
 function Stat({ label, value, sub, gain, first, info }: { label: string; value: string; sub: string; gain?: boolean; first?: boolean; info?: string }) {
   return (
-    <div className={cn("flex w-[314px] flex-col justify-center gap-2.5 py-1", first ? "pr-8" : "border-l border-line px-8")}>
+    <div className={cn("flex max-w-[314px] min-w-0 flex-1 flex-col justify-center gap-2.5 py-1", first ? "pr-8" : "border-l border-line px-8")}>
       <span className="t-l12 flex items-center gap-1 text-white/50">
         {label}
         {info && <InfoButton label={`About ${label}`} tip={info} className="-my-1" />}
@@ -269,7 +332,7 @@ function TabButton({ on, onClick, icon, label, count }: { on: boolean; onClick: 
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={cn("t-b14 flex h-12 items-center gap-2 rounded-sm px-3 transition-colors", on ? "bg-white/5 text-white" : "text-white/50 hover:text-white/80")}
+      className={cn("t-b14 flex h-12 items-center gap-2 rounded-sm px-2.5 transition-colors", on ? "bg-white/5 text-white" : "text-white/50 hover:text-white/80")}
     >
       {icon}
       {label}
@@ -293,17 +356,6 @@ function SectionTitle({ cat, right }: { cat: Category; right: ReactNode }) {
 
 function Setups({ rows, layout, onOpen, empty }: { rows: Setup[]; layout: Layout; onOpen: (id: string) => void; empty: ReactNode }) {
   if (rows.length === 0) return <>{empty}</>;
-  if (layout === "list")
-    return (
-      <section className="overflow-x-auto rounded-sm border border-line bg-card">
-        <div className="min-w-[1100px]">
-          <SetupTableHeader />
-          {rows.map((s, i) => (
-            <SetupTableRow key={s.id} setup={s} onOpen={onOpen} last={i === rows.length - 1} />
-          ))}
-        </div>
-      </section>
-    );
   return (
     <div className="grid grid-cols-3 gap-4">
       {rows.map((s) => (
