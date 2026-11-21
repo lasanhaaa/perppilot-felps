@@ -175,7 +175,7 @@ export function Web3UniverseMark({ size = 20 }: { size?: number }) {
 export const LOGO_MARK_PATH =
   "M24.3452 8.42143H32.5605V12.1394C32.5605 12.1618 32.6328 12.1923 32.6293 12.229L32.5051 12.3535C27.9653 12.4234 24.289 16.231 24.3452 20.7857L20.059 20.7409V12.3643H11.8883L11.8437 8.42143C16.3987 8.4501 20.117 4.5413 20.059 0L24.3452 0.0456908V8.42233V8.42143Z";
 
-/** Candle icon used on the "Start trading" button. */
+/** Candle icon used on the "Start trading" button: a solid glyph in the label colour (no outline). */
 export function CandleIcon({ size = 20 }: { size?: number }) {
   const d = [
     "M5 2.5C5.46 2.5 5.83 2.87 5.83 3.33V4.17C6.75 4.17 7.5 4.91 7.5 5.83V8.33C7.5 9.25 6.75 10 5.83 10V16.67C5.83 17.13 5.46 17.5 5 17.5C4.54 17.5 4.17 17.13 4.17 16.67V10C3.25 10 2.5 9.25 2.5 8.33V5.83C2.5 4.91 3.25 4.17 4.17 4.17V3.33C4.17 2.87 4.54 2.5 5 2.5Z",
@@ -185,7 +185,7 @@ export function CandleIcon({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden style={{ flex: "none" }}>
       {d.map((p) => (
-        <path key={p} d={p} fill="#354052" stroke="black" />
+        <path key={p} d={p} fill="currentColor" />
       ))}
     </svg>
   );
