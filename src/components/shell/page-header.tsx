@@ -1,41 +1,44 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { Icon } from "@/components/icons";
+import { IconButton } from "@/components/ui/primitives";
 
-/** Title + subtitle on the left, actions on the right (Figma: Top header). */
+/** Top header of platform pages: title + description, optional back button and actions. */
 export function PageHeader({
   title,
-  subtitle,
+  description,
+  back,
   actions,
-  backHref,
+  border = true,
   className,
 }: {
   title: ReactNode;
-  subtitle?: ReactNode;
+  description?: ReactNode;
+  back?: string;
   actions?: ReactNode;
-  backHref?: string;
+  border?: boolean;
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-4 px-4 pt-6 pb-4 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-14 lg:pt-6", className)}>
-      <div className="flex items-center gap-4">
-        {backHref && (
-          <Link href={backHref} aria-label="Back" className="grid size-12 shrink-0 place-items-center bg-fill-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white">
-            <Icon name="arrow-back" size={24} />
-          </Link>
-        )}
-        <div className="min-w-0">
-          <h1 className="font-display text-[24px] leading-[1.3] tracking-[-0.01em] sm:text-[24px]">{title}</h1>
-          {subtitle && <div className="text-[14px] leading-[1.5] text-white/60">{subtitle}</div>}
-        </div>
+    <header
+      className={cn(
+        "flex items-center gap-4 py-6",
+        // No class merging in this project: only add the defaults the caller did not override.
+        !/\bmin-h-/.test(className ?? "") && "min-h-[108px]",
+        !/\bpx-/.test(className ?? "") && "px-14",
+        border && "border-b border-line",
+        className,
+      )}
+    >
+      {back && <IconButton href={back} label="Back" />}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <h1 className="t-h24">{title}</h1>
+        {description && <p className="t-b16 text-white/60">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}
-    </div>
+      {actions}
+    </header>
   );
 }
 
-/** Content padding shared by platform pages. */
 export function PageBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("px-4 pb-16 sm:px-8 lg:px-14", className)}>{children}</div>;
+  return <div className={cn("flex flex-col gap-4 px-14 py-8", className)}>{children}</div>;
 }

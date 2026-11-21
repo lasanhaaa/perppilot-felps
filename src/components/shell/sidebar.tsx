@@ -3,122 +3,120 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { Icon, type IconName } from "@/components/icons";
-import { Logo } from "@/components/brand";
-import { Badge } from "@/components/ui/tag";
-import { useI18n, type MessageKey } from "@/lib/i18n";
-import { LanguageRow } from "./language-switcher";
-import { ProfileMenu } from "./profile-menu";
-import { SidebarPromo } from "./promos";
-import { useShell } from "./shell-context";
+import { useStore } from "@/lib/store";
+import { Icon, Logo, type IconName } from "@/components/ui/icons";
+import { WhatsNewBell } from "@/components/shell/whats-new";
 
-type NavItem = { href: string; label: MessageKey; icon: IconName; soon?: boolean; external?: boolean };
+/** Menu component "menu" (2086:5659), variant per active page. */
+type Item = { href: string; label: string; icon: IconName; match: (p: string) => boolean; soon?: boolean; sub?: Sub[] };
+/** Side Menu / Sublink (2309:17055): shown under its link while that section is open. */
+type Sub = { href: string; label: string; match: (p: string) => boolean };
 
-const PLATFORM: NavItem[] = [
-  { href: "/bots/new", label: "nav.newBot", icon: "add-diamond" },
-  { href: "/bots", label: "nav.bots", icon: "bot" },
-  { href: "/accounts", label: "nav.accounts", icon: "accounts" },
-  { href: "/course", label: "nav.course", icon: "course" },
-  { href: "#", label: "nav.points", icon: "asterisk", soon: true },
+const PLATFORM: Item[] = [
+  { href: "/overview", label: "Overview", icon: "chart", match: (p) => p.startsWith("/overview") },
+  { href: "/bots", label: "Bots", icon: "bot", match: (p) => p.startsWith("/bots") },
+  { href: "/accounts", label: "Accounts", icon: "accounts", match: (p) => p.startsWith("/accounts") },
+  { href: "/course", label: "Course", icon: "book", match: (p) => p.startsWith("/course") },
+  { href: "#", label: "Points", icon: "asterisk", match: () => false, soon: true },
+];
+const TOOLS: Item[] = [{ href: "/explore", label: "Explore Liquidity", icon: "droplet", match: (p) => p.startsWith("/explore") }];
+const SOCIAL: Item[] = [
+  {
+    href: "/leaderboard",
+    label: "Leaderboard",
+    icon: "trophy",
+    match: (p) => p.startsWith("/leaderboard"),
+    sub: [
+      { href: "/leaderboard", label: "Seasonal", match: (p) => p === "/leaderboard" },
+      { href: "/leaderboard/global", label: "Global", match: (p) => p.startsWith("/leaderboard/global") },
+    ],
+  },
+  { href: "https://discord.com", label: "Discord", icon: "bot", match: () => false },
 ];
 
-const SOCIAL: NavItem[] = [{ href: "https://discord.gg/perppilot", label: "nav.discord", icon: "bot", external: true }];
-
-function isActive(pathname: string, href: string) {
-  if (href === "/bots") return pathname === "/bots" || (pathname.startsWith("/bots/") && !pathname.startsWith("/bots/new"));
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
-  const pathname = usePathname();
-  const { t } = useI18n();
-  const active = !item.soon && !item.external && isActive(pathname, item.href);
-  const classes = cn(
-    "flex items-center gap-2 p-2 text-[14px] tracking-[-0.02em] transition-colors",
-    active ? "bg-brand font-medium text-black" : "text-white/70 hover:bg-fill-2 hover:text-white",
-    item.soon && "pointer-events-none",
-  );
-  const content = (
-    <>
-      <Icon name={item.icon} size={20} className={active ? "" : "opacity-70"} />
-      <span className="flex-1">{t(item.label)}</span>
-      {item.soon && <Badge>{t("nav.comingSoon")}</Badge>}
-    </>
-  );
-
-  if (item.soon) {
-    return (
-      <span aria-disabled="true" className={classes}>
-        {content}
-      </span>
-    );
-  }
-  if (item.external) {
-    return (
-      <a href={item.href} target="_blank" rel="noreferrer" className={classes}>
-        {content}
-      </a>
-    );
-  }
+function Group({ title, items, path }: { title: string; items: Item[]; path: string }) {
   return (
-    <Link href={item.href} aria-current={active ? "page" : undefined} className={classes} onClick={onNavigate}>
-      {content}
-    </Link>
-  );
-}
-
-export function NotificationsButton({ count = 2 }: { count?: number }) {
-  const { openChangelog } = useShell();
-  return (
-    <button
-      type="button"
-      onClick={openChangelog}
-      aria-label={`What is new, ${count} unread`}
-      className="relative grid size-10 shrink-0 place-items-center bg-fill-2 text-white transition-colors hover:bg-white/10"
-    >
-      <Icon name="bell" size={28} />
-      {count > 0 && (
-        <span className="absolute top-0.5 right-0.5 grid min-w-[21px] place-items-center bg-danger px-1 font-mono text-[14px] leading-[1.5] font-semibold text-white">
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-export function SidebarContent({ onNavigate, showPromo, showBell = true }: { onNavigate?: () => void; showPromo: boolean; showBell?: boolean }) {
-  const { t } = useI18n();
-  return (
-    <div className="flex h-full flex-col justify-between pt-6 pb-8">
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between px-4">
-          <Link href="/bots" aria-label="PerpPilot home" onClick={onNavigate}>
-            <Logo className="text-white" />
-          </Link>
-          {showBell && <NotificationsButton />}
-        </div>
-        <nav aria-label={t("nav.platform")} className="flex flex-col gap-2">
-          <p className="px-4 text-[12px] font-medium tracking-[-0.02em] text-white/30 uppercase">{t("nav.platform")}</p>
-          <div className="flex flex-col px-2">
-            {PLATFORM.map((item) => (
-              <NavLink key={item.label} item={item} onNavigate={onNavigate} />
-            ))}
-          </div>
-        </nav>
-        <nav aria-label={t("nav.social")} className="flex flex-col gap-2">
-          <p className="px-4 text-[12px] font-medium tracking-[-0.02em] text-white/30 uppercase">{t("nav.social")}</p>
-          <div className="flex flex-col px-2">
-            {SOCIAL.map((item) => (
-              <NavLink key={item.label} item={item} onNavigate={onNavigate} />
-            ))}
-          </div>
-        </nav>
-      </div>
-      <div className="flex flex-col gap-4">
-        {showPromo && <SidebarPromo />}
-        <LanguageRow />
-        <ProfileMenu />
+    <div className="flex flex-col gap-2">
+      <p className="t-l12 px-4 tracking-[-0.02em] text-white/30">{title}</p>
+      <div className="flex flex-col px-2">
+        {items.map((it) => {
+          const active = it.match(path);
+          const link = (
+            <Link
+              key={it.label}
+              href={it.href}
+              target={it.href.startsWith("http") ? "_blank" : undefined}
+              onClick={(e) => it.soon && e.preventDefault()}
+              className={cn(
+                "group flex h-[37px] items-center gap-2 rounded-[2px] p-2 transition-colors",
+                active ? "bg-white/10" : "opacity-70 hover:bg-white/5 hover:opacity-100",
+                it.soon && "cursor-default hover:bg-transparent hover:opacity-70",
+              )}
+            >
+              <Icon name={it.icon} size={20} className={cn(!active && "opacity-50")} />
+              <span className={cn("t-b14 flex-1 tracking-[-0.02em]", active ? "font-medium text-white" : "text-white/70")}>{it.label}</span>
+              {it.soon && (
+                <span className="inline-flex h-5 items-center gap-1 border border-warning/30 bg-warning/10 px-1.5 text-[11px] leading-none font-medium tracking-[0.04em] text-warning uppercase">
+                  <span className="size-1 bg-warning" />
+                  Coming soon
+                </span>
+              )}
+            </Link>
+          );
+          if (!it.sub || !active) return link;
+          return (
+            <div key={it.label} className="flex flex-col">
+              {link}
+              <div className="flex flex-col py-1">
+                {it.sub.map((s) => {
+                  const on = s.match(path);
+                  return (
+                    <Link key={s.href} href={s.href} className="group/sub flex h-8 items-stretch gap-[17px] pl-[17px]">
+                      <span className={cn("w-0.5 flex-none transition-colors", on ? "bg-white" : "bg-white/10 group-hover/sub:bg-white/30")} />
+                      <span className={cn("t-b14 flex items-center tracking-[-0.02em] transition-colors", on ? "text-white" : "text-white/60 group-hover/sub:text-white/80")}>
+                        {s.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+export function Sidebar() {
+  const path = usePathname();
+  const { state } = useStore();
+  const name = state.name || "Samuel Lembke";
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("");
+  return (
+    <aside className="sticky top-0 z-30 flex h-screen w-[264px] flex-none flex-col justify-between border-r border-line pt-6 pb-8">
+      <div className="flex flex-col gap-6">
+        <div className="flex h-10 items-center justify-between px-4">
+          <Link href="/overview" aria-label="PerpPilot home">
+            <Logo />
+          </Link>
+          <WhatsNewBell />
+        </div>
+        <Group title="Platform" items={PLATFORM} path={path} />
+        <Group title="Tools" items={TOOLS} path={path} />
+        <Group title="Social" items={SOCIAL} path={path} />
+      </div>
+      <div className="px-2">
+        <button type="button" className="flex w-full items-center gap-3 rounded-[2px] p-2 text-left hover:bg-white/5">
+          <span className="flex size-8 items-center justify-center bg-coming text-[16px] leading-6 font-semibold text-black uppercase">{initials}</span>
+          <span className="t-b16 flex-1 truncate text-white/60">{name}</span>
+          <Icon name="menu-chevron-down" size={24} className="opacity-50" />
+        </button>
+      </div>
+    </aside>
   );
 }

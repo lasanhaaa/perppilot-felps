@@ -1,0 +1,392 @@
+"use client";
+
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { cn } from "@/lib/cn";
+
+const GAIN = "#4ADE80";
+const LOSS = "#FF3737";
+
+function path(values: number[], w: number, h: number, pad = 3, min?: number, max?: number) {
+  const lo = min ?? Math.min(...values);
+  const hi = max ?? Math.max(...values);
+  const span = hi - lo || 1;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, pad + (1 - (v - lo) / span) * (h - pad * 2)] as const);
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("");
+  return { d, pts };
+}
+
+/** "Bot Card / Performance Chart" (577:586): line + soft area + square end markers. */
+export function Sparkline({ values, width = 120, height = 28, negative, className }: { values: number[]; width?: number; height?: number; negative?: boolean; className?: string }) {
+  const id = useId();
+  const color = negative ? LOSS : GAIN;
+  const { d, pts } = path(values, width - 6, height, 4);
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  return (
+    <svg width={width} height={height} viewBox={`-3 0 ${width} ${height}`} className={cn("overflow-visible", className)} aria-hidden preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity="0.16" />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${d}L${last[0]} ${height}L0 ${height}Z`} fill={`url(#${id})`} />
+      <path d={d} fill="none" stroke={color} strokeOpacity="0.7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <rect x={first[0] - 3} y={first[1] - 3} width="6" height="6" fill={color} fillOpacity="0.7" />
+      <rect x={last[0] - 3} y={last[1] - 3} width="6" height="6" fill={color} fillOpacity="0.7" />
+    </svg>
+  );
+}
+
+/** Responsive sparkline: stretches to its container width. */
+export function FluidSparkline({ values, height = 56, negative }: { values: number[]; height?: number; negative?: boolean }) {
+  const id = useId();
+  const color = negative ? LOSS : GAIN;
+  const W = 460;
+  const { d, pts } = path(values, W, height, 6);
+  const last = pts[pts.length - 1];
+  const first = pts[0];
+  return (
+    <div className="relative w-full" style={{ height }}>
+      <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" className="absolute inset-0 overflow-visible" aria-hidden>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={color} stopOpacity="0.16" />
+            <stop offset="1" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={`${d}L${W} ${height}L0 ${height}Z`} fill={`url(#${id})`} />
+        <path d={d} fill="none" stroke={color} strokeOpacity="0.7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <span className="absolute size-1.5" style={{ left: 0, top: first[1] - 3, background: color, opacity: 0.7 }} />
+      <span className="absolute size-1.5" style={{ right: 0, top: last[1] - 3, background: color, opacity: 0.7 }} />
+    </div>
+  );
+}
+
+/** Eases the last value of a series toward its new target, so a live chart end glides instead of jumping. */
+function useLiveTail(values: number[], enabled: boolean) {
+  const reduced = useReducedMotion();
+  const target = values[values.length - 1];
+  const [tail, setTail] = useState(target);
+  const cur = useRef(target);
+  useEffect(() => {
+    if (!enabled || reduced) {
+      cur.current = target;
+      setTail(target);
+      return;
+    }
+    const from = cur.current;
+    if (from === target) return;
+    let raf = 0;
+    let t0 = 0;
+    const step = (now: number) => {
+      if (!t0) t0 = now;
+      const t = Math.min(1, (now - t0) / 600);
+      const v = from + (target - from) * (1 - Math.pow(1 - t, 3));
+      cur.current = v;
+      setTail(v);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, enabled, reduced]);
+  return useMemo(() => (enabled ? [...values.slice(0, -1), tail] : values), [values, tail, enabled]);
+}
+
+/** Restarts a CSS animation class on an element each time `k` changes (nothing remounts). */
+function useRestartClass<T extends HTMLElement>(k: number | undefined, cls: string) {
+  const ref = useRef<T>(null);
+  const seen = useRef(k);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || k === undefined || k === seen.current) return;
+    seen.current = k;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }, [k, cls]);
+  return ref;
+}
+
+/** Equity / earnings area chart with a hover crosshair and tooltip (Overview Performance card). */
+export function AreaChart({
+  values,
+  labels,
+  height = 300,
+  yTicks,
+  format,
+  tooltip,
+  startIndex,
+  live,
+  pulseKey,
+}: {
+  values: number[];
+  labels: string[];
+  height?: number;
+  yTicks: number[];
+  format: (v: number) => string;
+  tooltip: (i: number) => ReactNode;
+  startIndex?: number;
+  /** The last point is "now": it glides to new values and its marker pings. */
+  live?: boolean;
+  /** Bump on each fill: the end marker flashes. */
+  pulseKey?: number;
+}) {
+  const id = useId();
+  const W = 971;
+  values = useLiveTail(values, !!live);
+  const flash = useRestartClass<HTMLSpanElement>(pulseKey, "chart-hit");
+  const lo = Math.min(...yTicks);
+  const hi = Math.max(...yTicks);
+  const { d, pts } = path(values, W, height, 0, lo, hi);
+  const [hover, setHover] = useState<number | null>(startIndex ?? null);
+  const last = pts[pts.length - 1];
+  const hp = hover !== null ? pts[hover] : null;
+  return (
+    <div className="flex gap-3">
+      <div className="relative min-w-0 flex-1">
+        <div
+          className="relative"
+          style={{ height }}
+          onMouseMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const i = Math.round(((e.clientX - r.left) / r.width) * (values.length - 1));
+            setHover(Math.max(0, Math.min(values.length - 1, i)));
+          }}
+          onMouseLeave={() => setHover(startIndex ?? null)}
+        >
+          <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" className="absolute inset-0 overflow-visible" aria-hidden>
+            <defs>
+              <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor={GAIN} stopOpacity="0.22" />
+                <stop offset="1" stopColor={GAIN} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {yTicks.map((t) => {
+              const y = (1 - (t - lo) / (hi - lo)) * height;
+              return <line key={t} x1="0" x2={W} y1={y} y2={y} stroke="white" strokeOpacity={t === lo ? 0.15 : 0.08} vectorEffect="non-scaling-stroke" />;
+            })}
+            <path d={`${d}L${W} ${height}L0 ${height}Z`} fill={`url(#${id})`} />
+            <path d={d} fill="none" stroke={GAIN} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            {hp && (
+              <>
+                <line x1={hp[0]} x2={W} y1={hp[1]} y2={hp[1]} stroke={GAIN} strokeDasharray="2 3" strokeOpacity="0.8" vectorEffect="non-scaling-stroke" />
+                <line x1={hp[0]} x2={hp[0]} y1={hp[1]} y2={height} stroke={GAIN} strokeOpacity="0.6" vectorEffect="non-scaling-stroke" />
+              </>
+            )}
+          </svg>
+          {live && hover === null && (
+            <span className="pointer-events-none absolute inset-x-0 border-t border-dashed border-gain/35" style={{ top: last[1] }} />
+          )}
+          <span className="absolute size-2" style={{ left: `calc(${(last[0] / W) * 100}% - 4px)`, top: last[1] - 4 }}>
+            {live && <span className="live-ping absolute inset-0 bg-gain" />}
+            <span ref={flash} className="absolute inset-0 bg-gain" />
+          </span>
+          {hp && hover !== null && (
+            <>
+              <span
+                className="pointer-events-none absolute size-[18px] bg-gain/20"
+                style={{ left: `calc(${(hp[0] / W) * 100}% - 9px)`, top: hp[1] - 9 }}
+              />
+              <span
+                className="pointer-events-none absolute size-2.5 border border-gain bg-[#040406]"
+                style={{ left: `calc(${(hp[0] / W) * 100}% - 5px)`, top: hp[1] - 5 }}
+              />
+              <div
+                className="pointer-events-none absolute top-0 z-10 w-[244px] border border-white/12 bg-screen px-3.5 py-3"
+                style={hp[0] / W > 0.6 ? { right: `calc(${100 - (hp[0] / W) * 100}% + 18px)` } : { left: `calc(${(hp[0] / W) * 100}% - 262px + 0px)`, ...(hp[0] / W < 0.3 ? { left: `calc(${(hp[0] / W) * 100}% + 18px)` } : {}) }}
+              >
+                {tooltip(hover)}
+              </div>
+              <span
+                className="t-l12 pointer-events-none absolute bg-white/12 px-1.5 py-px tracking-normal normal-case text-white"
+                style={{ left: `calc(${(hp[0] / W) * 100}% - 24px)`, top: height + 11 }}
+              >
+                {labels[hover]}
+              </span>
+            </>
+          )}
+        </div>
+        <div className="mt-3 flex justify-between">
+          {[0, 0.25, 0.5, 0.75, 1].map((f) => {
+            const i = Math.round(f * (labels.length - 1));
+            return (
+              <span key={f} className={cn("text-[12px] leading-[15px] font-medium text-white/40", hover === i && "opacity-0")}>
+                {labels[i]}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+      <div className="relative w-11 flex-none" style={{ height }}>
+        {yTicks.map((t) => (
+          <span key={t} className="absolute text-[12px] leading-[15px] font-medium text-white/40" style={{ top: (1 - (t - lo) / (hi - lo)) * height - 7 }}>
+            {format(t)}
+          </span>
+        ))}
+        {hp && hover !== null && (
+          <span className="absolute -left-1 bg-gain px-1 py-0.5 text-[12px] leading-[15px] font-medium text-black" style={{ top: hp[1] - 9 }}>
+            {format(values[hover])}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Daily earnings bars with a hover tooltip. */
+export function BarChart({
+  values,
+  labels,
+  height = 200,
+  tooltip,
+  startIndex,
+  live,
+  pulseKey,
+}: {
+  values: number[];
+  labels: string[];
+  height?: number;
+  tooltip: (i: number) => ReactNode;
+  startIndex?: number;
+  /** The last bar is today: it grows smoothly, stays bright and flashes on each fill. */
+  live?: boolean;
+  pulseKey?: number;
+}) {
+  values = useLiveTail(values, !!live);
+  const flash = useRestartClass<HTMLSpanElement>(pulseKey, "chart-hit");
+  const ticks = [40, 30, 20, 10, 0, -10];
+  const hi = 40;
+  const lo = -10;
+  const y = (v: number) => ((hi - v) / (hi - lo)) * height;
+  const [hover, setHover] = useState<number | null>(startIndex ?? null);
+  return (
+    <div className="flex gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="relative" style={{ height }} onMouseLeave={() => setHover(startIndex ?? null)}>
+          {ticks.map((t) => (
+            <span key={t} className="absolute inset-x-0 border-t border-dotted border-white/12" style={{ top: y(t) }} />
+          ))}
+          <span className="absolute inset-x-0 h-px bg-white/20" style={{ top: y(0) }} />
+          <div className="absolute inset-0 flex">
+            {values.map((v, i) => (
+              <div key={i} className="relative flex-1" onMouseEnter={() => setHover(i)}>
+                {hover === i && <span className="absolute inset-y-0 left-[2px] right-[2px] bg-white/4" />}
+                <span
+                  ref={live && i === values.length - 1 ? flash : undefined}
+                  className={cn(
+                    "absolute left-1/2 w-[68%] max-w-[22px] -translate-x-1/2",
+                    v >= 0 ? (hover === i || (live && i === values.length - 1) ? "bg-gain" : "bg-gain/55") : hover === i ? "bg-error" : "bg-error/70",
+                  )}
+                  style={v >= 0 ? { top: y(v), height: y(0) - y(v) } : { top: y(0), height: y(v) - y(0) }}
+                />
+                {live && i === values.length - 1 && v >= 0 && (
+                  <span className="live-breathe absolute left-1/2 h-0.5 w-[68%] max-w-[22px] -translate-x-1/2 bg-white" style={{ top: y(v) - 3 }} />
+                )}
+                {hover === i && v >= 0 && <span className="absolute left-1/2 h-0.5 w-[68%] max-w-[22px] -translate-x-1/2 bg-white" style={{ top: y(v) }} />}
+              </div>
+            ))}
+          </div>
+          {hover !== null && (
+            <div
+              className="pointer-events-none absolute top-6 z-10 w-[176px] border border-white/12 bg-screen p-3"
+              style={hover / values.length > 0.6 ? { right: `calc(${100 - (hover / values.length) * 100}% + 12px)` } : { left: `calc(${((hover + 1) / values.length) * 100}% + 12px)` }}
+            >
+              {tooltip(hover)}
+            </div>
+          )}
+        </div>
+        <div className="mt-3 flex justify-between">
+          {[0, 7, 14, 21, values.length - 1].map((i) => (
+            <span key={i} className="text-[12px] leading-[15px] font-medium text-white/40">
+              {labels[i]}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="relative w-12 flex-none" style={{ height }}>
+        {ticks.map((t) => (
+          <span key={t} className="absolute text-[12px] leading-[15px] font-medium text-white/40" style={{ top: y(t) - 8 }}>
+            {t < 0 ? `-$${-t}` : `$${t}`}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Greyscale donut (Exchange allocation). */
+/** Thin-ring donut. Percentages live in the legend; hovering a segment (or its legend row via `active`) names it in the center. */
+export function Donut({
+  segments,
+  size = 216,
+  thickness = 20,
+  center,
+  active,
+  onActive,
+}: {
+  segments: { value: number; shade: string; label: string; name?: string }[];
+  size?: number;
+  thickness?: number;
+  center: ReactNode;
+  active?: number | null;
+  onActive?: (i: number | null) => void;
+}) {
+  const [hoverSelf, setHoverSelf] = useState<number | null>(null);
+  const hover = active ?? hoverSelf;
+  const setHover = (i: number | null) => {
+    setHoverSelf(i);
+    onActive?.(i);
+  };
+  const total = segments.reduce((a, s) => a + s.value, 0);
+  const R = size / 2;
+  const r = R - thickness;
+  const arcs = useMemo(() => {
+    let a0 = 0;
+    const single = segments.length === 1;
+    return segments.map((s) => {
+      const a1 = a0 + (s.value / total) * Math.PI * 2;
+      // ~2px gap between segments, whatever the radius.
+      const gap = single ? 0 : 1 / R;
+      const p = (a: number, rad: number) => [R + rad * Math.sin(a), R - rad * Math.cos(a)];
+      const end = single ? a1 - 0.0001 : a1 - gap;
+      const [x0, y0] = p(a0 + gap, R);
+      const [x1, y1] = p(end, R);
+      const [x2, y2] = p(end, r);
+      const [x3, y3] = p(a0 + gap, r);
+      const large = a1 - a0 > Math.PI ? 1 : 0;
+      const d = `M${x0} ${y0}A${R} ${R} 0 ${large} 1 ${x1} ${y1}L${x2} ${y2}A${r} ${r} 0 ${large} 0 ${x3} ${y3}Z`;
+      a0 = a1;
+      return { d, s };
+    });
+  }, [segments, total, R, r]);
+  const hovered = hover != null ? segments[hover] : null;
+  return (
+    <div className="relative" style={{ width: size, height: size }} onMouseLeave={() => setHover(null)}>
+      <svg width={size} height={size} aria-hidden>
+        {arcs.map(({ d, s }, i) => (
+          <path
+            key={i}
+            d={d}
+            fill={s.shade}
+            onMouseEnter={() => setHover(i)}
+            className="transition-opacity duration-150"
+            style={{ opacity: hover == null || hover === i ? 1 : 0.25 }}
+          />
+        ))}
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-center">
+        {hovered ? (
+          <>
+            <span className="tnum text-[18px] leading-[27px] font-medium">{hovered.label}</span>
+            {hovered.name && <span className="text-[12px] leading-[15px] font-medium text-white/55">{hovered.name}</span>}
+          </>
+        ) : (
+          center
+        )}
+      </div>
+    </div>
+  );
+}
